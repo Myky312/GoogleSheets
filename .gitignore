@@ -1,0 +1,6 @@
+# .gitignore
+
+.env
+.env.test
+logs/
+node_modules/
