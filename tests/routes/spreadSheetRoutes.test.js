@@ -638,7 +638,7 @@ describe("Spreadsheet Routes", () => {
     });
   });
 
-  describe("POST /spreadsheets/:id/remove-collaborator", () => {
+  describe("DELETE /spreadsheets/:id/remove-collaborator", () => {
     it("should remove a collaborator and emit event", async () => {
       // Mock the spreadsheet and collaborator
       Spreadsheet.findByPk.mockResolvedValue({
@@ -657,7 +657,7 @@ describe("Spreadsheet Routes", () => {
       getIO.mockReturnValue({ to: () => ({ emit: mockEmitRemove }) });
 
       const res = await request(app)
-        .post(
+        .delete(
           "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/remove-collaborator"
         )
         .set("Authorization", "Bearer valid-token")
@@ -695,7 +695,7 @@ describe("Spreadsheet Routes", () => {
       Spreadsheet.findByPk.mockResolvedValue(null);
 
       const res = await request(app)
-        .post("/spreadsheets/non-existent-id/remove-collaborator")
+        .delete("/spreadsheets/non-existent-id/remove-collaborator")
         .set("Authorization", "Bearer valid-token")
         .send({ collaboratorId: "collab-id-456" });
 
@@ -713,7 +713,7 @@ describe("Spreadsheet Routes", () => {
       });
 
       const res = await request(app)
-        .post(
+        .delete(
           "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/remove-collaborator"
         )
         .set("Authorization", "Bearer collaborator-token") // Simulating a collaborator trying to remove another collaborator
@@ -739,7 +739,7 @@ describe("Spreadsheet Routes", () => {
       });
 
       const res = await request(app)
-        .post(
+        .delete(
           "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/remove-collaborator"
         )
         .set("Authorization", "Bearer valid-token")
@@ -761,7 +761,7 @@ describe("Spreadsheet Routes", () => {
       UserSpreadsheet.findOne.mockResolvedValue(null);
 
       const res = await request(app)
-        .post(
+        .delete(
           "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/remove-collaborator"
         )
         .set("Authorization", "Bearer valid-token")
@@ -781,7 +781,7 @@ describe("Spreadsheet Routes", () => {
       Spreadsheet.findByPk.mockRejectedValue(new Error("Database error"));
 
       const res = await request(app)
-        .post(
+        .delete(
           "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/remove-collaborator"
         )
         .set("Authorization", "Bearer valid-token")

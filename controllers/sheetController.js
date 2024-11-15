@@ -15,7 +15,7 @@ class SpreadsheetController {
 
       // Emit Socket.IO event
       const io = getIO();
-      io.to(ownerId).emit("spreadsheetCreated", { spreadsheet });
+      io.to(ownerId).emit("sheetCreated", { spreadsheet });
 
       res.status(201).json({ success: true, data: spreadsheet });
     } catch (error) {

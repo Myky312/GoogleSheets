@@ -257,7 +257,7 @@ router.post(
 /**
  * @swagger
  * /spreadsheets/{id}/remove-collaborator:
- *   post:
+ *   delete:
  *     summary: Remove a collaborator from a spreadsheet
  *     tags: [Spreadsheets]
  *     security:
@@ -292,7 +292,7 @@ router.post(
  *       '404':
  *         description: Spreadsheet or collaborator not found
  */
-router.post(
+router.delete(
   "/:id/remove-collaborator",
   [
     param("id").isUUID().withMessage("Invalid spreadsheet ID format"),
