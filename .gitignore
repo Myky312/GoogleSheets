@@ -4,3 +4,4 @@
 .env.test
 logs/
 node_modules/
+tests/coverage
