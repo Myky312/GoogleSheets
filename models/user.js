@@ -8,7 +8,7 @@ module.exports = (sequelize) => {
       User.belongsToMany(models.Spreadsheet, {
         through: models.UserSpreadsheet,
         foreignKey: "userId",
-        as: "Collaborations",
+        as: "CollaboratingSpreadsheets",
       });
       User.hasMany(models.Spreadsheet, {
         foreignKey: "ownerId",

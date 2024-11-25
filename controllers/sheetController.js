@@ -1,125 +1,219 @@
-// controllers/spreadsheetController.js
+// controllers/sheetController.js
 
-const SpreadsheetService = require("../services/spreadsheetService");
+const { Sheet, Spreadsheet } = require("../models");
+const { validationResult } = require("express-validator");
 const { getIO } = require("../socket");
 
-class SpreadsheetController {
-  static async createSpreadsheet(req, res, next) {
-    try {
-      const { name } = req.body;
-      const ownerId = req.user.id;
-      const spreadsheet = await SpreadsheetService.createSpreadsheet(
-        name,
-        ownerId
-      );
-
-      // Emit Socket.IO event
-      const io = getIO();
-      io.to(ownerId).emit("sheetCreated", { spreadsheet });
-
-      res.status(201).json({ success: true, data: spreadsheet });
-    } catch (error) {
-      next(error);
+/**
+ * Create a new sheet within a spreadsheet.
+ * Both owners and collaborators can create sheets.
+ */
+exports.createSheet = async (req, res, next) => {
+  try {
+    // Validate input
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
     }
-  }
 
-  static async getAllSpreadsheets(req, res, next) {
-    try {
-      const userId = req.user.id;
-      const spreadsheets = await SpreadsheetService.getAllSpreadsheets(userId);
-      res.status(200).json({ success: true, data: spreadsheets });
-    } catch (error) {
-      next(error);
+    const { name } = req.body;
+    const spreadsheetId = req.params.spreadsheetId;
+
+    // Fetch the spreadsheet
+    const spreadsheet = await Spreadsheet.findByPk(spreadsheetId);
+
+    if (!spreadsheet) {
+      return res.status(404).json({ message: "Spreadsheet not found" });
     }
-  }
 
-  static async getSpreadsheetById(req, res, next) {
-    try {
-      const { spreadsheetId } = req.params;
-      const userId = req.user.id;
-      const spreadsheet = await SpreadsheetService.getSpreadsheetById(
-        spreadsheetId,
-        userId
-      );
-      res.status(200).json({ success: true, data: spreadsheet });
-    } catch (error) {
-      next(error);
+    // Authorization: Check if the user is the owner or a collaborator
+    if (spreadsheet.ownerId !== req.user.id) {
+      const isCollaborator = await spreadsheet.hasCollaborator(req.user.id);
+      if (!isCollaborator) {
+        return res
+          .status(403)
+          .json({ message: "Access denied to create sheet" });
+      }
     }
-  }
 
-  static async updateSpreadsheet(req, res, next) {
-    try {
-      const { spreadsheetId } = req.params;
-      const updates = req.body;
-      const userId = req.user.id;
-      const updatedSpreadsheet = await SpreadsheetService.updateSpreadsheet(
-        spreadsheetId,
-        updates,
-        userId
-      );
-      res.status(200).json({ success: true, data: updatedSpreadsheet });
-    } catch (error) {
-      next(error);
+    // Create the sheet
+    const sheet = await Sheet.create({ spreadsheetId, name });
+
+    // Emit event to the spreadsheet room
+    const io = getIO();
+    io.to(spreadsheetId).emit("sheetCreated", { sheet });
+
+    res.status(201).json({ sheet });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Retrieve all sheets within a spreadsheet.
+ * Both owners and collaborators can retrieve sheets.
+ */
+exports.getSheets = async (req, res, next) => {
+  try {
+    const spreadsheetId = req.params.spreadsheetId;
+
+    // Fetch the spreadsheet
+    const spreadsheet = await Spreadsheet.findByPk(spreadsheetId);
+
+    if (!spreadsheet) {
+      return res.status(404).json({ message: "Spreadsheet not found" });
     }
-  }
 
-  static async deleteSpreadsheet(req, res, next) {
-    try {
-      const { spreadsheetId } = req.params;
-      const userId = req.user.id;
-      await SpreadsheetService.deleteSpreadsheet(spreadsheetId, userId);
-      res.status(204).send();
-    } catch (error) {
-      next(error);
+    // Authorization: Check if the user is the owner or a collaborator
+    if (spreadsheet.ownerId !== req.user.id) {
+      const isCollaborator = await spreadsheet.hasCollaborator(req.user.id);
+      if (!isCollaborator) {
+        return res
+          .status(403)
+          .json({ message: "Access denied to retrieve sheets" });
+      }
     }
+
+    const sheets = await Sheet.findAll({ where: { spreadsheetId } });
+
+    res.status(200).json({ sheets });
+  } catch (error) {
+    next(error);
   }
+};
 
-  static async addUserToSpreadsheet(req, res, next) {
-    try {
-      const { spreadsheetId } = req.params;
-      const { userId } = req.body;
-      const currentUserId = req.user.id;
-      await SpreadsheetService.addUserToSpreadsheet(
-        spreadsheetId,
-        userId,
-        currentUserId
-      );
+/**
+ * Retrieve a specific sheet by ID.
+ * Both owners and collaborators can access sheets.
+ */
+exports.getSheetById = async (req, res, next) => {
+  try {
+    const { spreadsheetId, sheetId } = req.params;
 
-      // Emit Socket.IO event
-      const io = getIO();
-      io.to(userId).emit("userAdded", { spreadsheetId, userId });
+    // Fetch the spreadsheet
+    const spreadsheet = await Spreadsheet.findByPk(spreadsheetId);
 
-      res.status(200).json({
-        success: true,
-        message: "User added to spreadsheet successfully",
-      });
-    } catch (error) {
-      next(error);
+    if (!spreadsheet) {
+      return res.status(404).json({ message: "Spreadsheet not found" });
     }
-  }
 
-  static async removeUserFromSpreadsheet(req, res, next) {
-    try {
-      const { spreadsheetId, userId } = req.params;
-      const currentUserId = req.user.id;
-      await SpreadsheetService.removeUserFromSpreadsheet(
-        spreadsheetId,
-        userId,
-        currentUserId
-      );
-
-      // Emit Socket.IO event
-      const io = getIO();
-      io.to(userId).emit("userRemoved", { spreadsheetId, userId });
-
-      res.status(200).json({
-        success: true,
-        message: "User removed from spreadsheet successfully",
-      });
-    } catch (error) {
-      next(error);
+    // Authorization: Check if the user is the owner or a collaborator
+    if (spreadsheet.ownerId !== req.user.id) {
+      const isCollaborator = await spreadsheet.hasCollaborator(req.user.id);
+      if (!isCollaborator) {
+        return res
+          .status(403)
+          .json({ message: "Access denied to access sheet" });
+      }
     }
-  }
-}
 
-module.exports = SpreadsheetController;
+    const sheet = await Sheet.findOne({
+      where: { id: sheetId, spreadsheetId },
+    });
+
+    if (!sheet) {
+      return res.status(404).json({ message: "Sheet not found" });
+    }
+
+    res.status(200).json({ sheet });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Update a sheet by ID.
+ * Both owners and collaborators can update sheets.
+ */
+exports.updateSheet = async (req, res, next) => {
+  try {
+    // Validate input
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { spreadsheetId, sheetId } = req.params;
+    const { name } = req.body;
+
+    // Fetch the spreadsheet
+    const spreadsheet = await Spreadsheet.findByPk(spreadsheetId);
+
+    if (!spreadsheet) {
+      return res.status(404).json({ message: "Spreadsheet not found" });
+    }
+
+    // Authorization: Check if the user is the owner or a collaborator
+    if (spreadsheet.ownerId !== req.user.id) {
+      const isCollaborator = await spreadsheet.hasCollaborator(req.user.id);
+      if (!isCollaborator) {
+        return res
+          .status(403)
+          .json({ message: "Access denied to update sheet" });
+      }
+    }
+
+    const sheet = await Sheet.findOne({
+      where: { id: sheetId, spreadsheetId },
+    });
+
+    if (!sheet) {
+      return res.status(404).json({ message: "Sheet not found" });
+    }
+
+    // Update sheet
+    sheet.name = name;
+    await sheet.save();
+
+    // Emit event to the spreadsheet room
+    const io = getIO();
+    io.to(spreadsheetId).emit("sheetUpdated", { sheet });
+
+    res.status(200).json({ sheet });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Delete a sheet by ID.
+ * Only the owner can delete sheets.
+ */
+exports.deleteSheet = async (req, res, next) => {
+  try {
+    const { spreadsheetId, sheetId } = req.params;
+
+    // Fetch the spreadsheet
+    const spreadsheet = await Spreadsheet.findByPk(spreadsheetId);
+
+    if (!spreadsheet) {
+      return res.status(404).json({ message: "Spreadsheet not found" });
+    }
+
+    // Authorization: Only the owner can delete sheets
+    if (spreadsheet.ownerId !== req.user.id) {
+      return res
+        .status(403)
+        .json({ message: "Only the owner can delete sheets" });
+    }
+
+    const sheet = await Sheet.findOne({
+      where: { id: sheetId, spreadsheetId },
+    });
+
+    if (!sheet) {
+      return res.status(404).json({ message: "Sheet not found" });
+    }
+
+    // Delete sheet
+    await sheet.destroy();
+
+    // Emit event to the spreadsheet room
+    const io = getIO();
+    io.to(spreadsheetId).emit("sheetDeleted", { sheetId });
+
+    res.status(200).json({ message: "Sheet deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+};

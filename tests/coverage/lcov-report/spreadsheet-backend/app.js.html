@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">92.85% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>26/28</span>
+                <span class='fraction'>26/26</span>
             </div>
         
             
@@ -37,16 +37,16 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/1</span>
+                <span class='fraction'>0/0</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">92.85% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>26/28</span>
+                <span class='fraction'>26/26</span>
             </div>
         
             
@@ -131,13 +131,8 @@
 <a name='L66'></a><a href='#L66'>66</a>
 <a name='L67'></a><a href='#L67'>67</a>
 <a name='L68'></a><a href='#L68'>68</a>
-<a name='L69'></a><a href='#L69'>69</a>
-<a name='L70'></a><a href='#L70'>70</a>
-<a name='L71'></a><a href='#L71'>71</a>
-<a name='L72'></a><a href='#L72'>72</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L69'></a><a href='#L69'>69</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -151,16 +146,18 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -180,10 +177,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -191,6 +184,10 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -200,9 +197,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// app.js
@@ -211,9 +205,7 @@ const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
-const path = require("path");
 const logger = require("./utils/logger");
-const bodyParser = require("body-parser");
 const authenticate = require("./middleware/authenticate");
 &nbsp;
 const swaggerUi = require("swagger-ui-express");
@@ -222,22 +214,24 @@ const swaggerSpec = require("./docs/swagger");
 // Import Routes
 const authRoutes = require("./routes/authRoutes");
 const spreadsheetRoutes = require("./routes/spreadsheetRoutes");
-// const sheetRoutes = require("./routes/sheetRoutes");
+const sheetRoutes = require("./routes/sheetRoutes");
+const cellRoutes = require("./routes/cellRoutes");
 const errorHandler = require("./middleware/errorHandler");
+&nbsp;
 const app = express();
 &nbsp;
 // Apply Middlewares
-// console.log('authenticate:', authenticate);
-// console.log('authRoutes:', authRoutes);
-// console.log('spreadsheetRoutes:', spreadsheetRoutes);
+&nbsp;
 // Set security HTTP headers
 app.use(helmet());
-app.use(bodyParser.json());
+&nbsp;
+// Parse incoming JSON requests
+app.use(express.json());
 &nbsp;
 // Enable CORS
 app.use(
   cors({
-    origin: "*", // Replace with your frontend's domain
+    origin: "*", // Replace with your frontend's domain in production
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
@@ -251,29 +245,26 @@ const authLimiter = rateLimit({
 });
 app.use("/auth", authLimiter);
 &nbsp;
-app.use(errorHandler);
-&nbsp;
-// Parse incoming JSON requests
-app.use(express.json());
-&nbsp;
 // Set Up Routes
+&nbsp;
 // Public routes
 app.use("/auth", authRoutes);
 &nbsp;
 // Protected routes
 app.use("/spreadsheets", authenticate, spreadsheetRoutes);
-// app.use("/spreadsheets", authenticate, sheetRoutes);
+app.use("/spreadsheets/:spreadsheetId/sheets", authenticate, sheetRoutes);
+&nbsp;
+app.use(
+  "/spreadsheets/:spreadsheetId/sheets/:sheetId/cells",
+  authenticate,
+  cellRoutes
+);
 &nbsp;
 // Swagger Documentation
-// console.log(JSON.stringify(swaggerSpec, null, 2)); // Log the Swagger JSON spec
-&nbsp;
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 &nbsp;
-// Global Error Handler
-app.use(<span class="fstat-no" title="function not covered" >(e</span>rr, req, res, next) =&gt; {
-<span class="cstat-no" title="statement not covered" >  logger.error(err.stack);</span>
-<span class="cstat-no" title="statement not covered" >  res.status(500).json({ error: "Something went wrong!" });</span>
-});
+// Global Error Handler (should be after all routes)
+app.use(errorHandler);
 &nbsp;
 module.exports = app;
 &nbsp;</pre></td></tr></table></pre>
@@ -283,7 +274,7 @@ module.exports = app;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2024-11-15T16:31:49.029Z
+                at 2024-11-25T11:38:03.415Z
             </div>
         <script src="../prettify.js"></script>
         <script>

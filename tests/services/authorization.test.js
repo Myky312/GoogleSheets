@@ -1,8 +1,8 @@
 // tests/auth.test.js
 
 const request = require("supertest");
-const app = require("../app");
-const { sequelize, User } = require("../models");
+const app = require("../../app");
+const { sequelize, User } = require("../../models");
 const jwt = require("jsonwebtoken");
 
 // Set JWT_SECRET for test environment if not set

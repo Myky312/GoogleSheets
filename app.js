@@ -4,9 +4,7 @@ const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
-const path = require("path");
 const logger = require("./utils/logger");
-const bodyParser = require("body-parser");
 const authenticate = require("./middleware/authenticate");
 
 const swaggerUi = require("swagger-ui-express");
@@ -15,22 +13,24 @@ const swaggerSpec = require("./docs/swagger");
 // Import Routes
 const authRoutes = require("./routes/authRoutes");
 const spreadsheetRoutes = require("./routes/spreadsheetRoutes");
-// const sheetRoutes = require("./routes/sheetRoutes");
+const sheetRoutes = require("./routes/sheetRoutes");
+const cellRoutes = require("./routes/cellRoutes");
 const errorHandler = require("./middleware/errorHandler");
+
 const app = express();
 
 // Apply Middlewares
-// console.log('authenticate:', authenticate);
-// console.log('authRoutes:', authRoutes);
-// console.log('spreadsheetRoutes:', spreadsheetRoutes);
+
 // Set security HTTP headers
 app.use(helmet());
-app.use(bodyParser.json());
+
+// Parse incoming JSON requests
+app.use(express.json());
 
 // Enable CORS
 app.use(
   cors({
-    origin: "*", // Replace with your frontend's domain
+    origin: "*", // Replace with your frontend's domain in production
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
@@ -44,28 +44,25 @@ const authLimiter = rateLimit({
 });
 app.use("/auth", authLimiter);
 
-app.use(errorHandler);
-
-// Parse incoming JSON requests
-app.use(express.json());
-
 // Set Up Routes
+
 // Public routes
 app.use("/auth", authRoutes);
 
 // Protected routes
 app.use("/spreadsheets", authenticate, spreadsheetRoutes);
-// app.use("/spreadsheets", authenticate, sheetRoutes);
+app.use("/spreadsheets/:spreadsheetId/sheets", authenticate, sheetRoutes);
+
+app.use(
+  "/spreadsheets/:spreadsheetId/sheets/:sheetId/cells",
+  authenticate,
+  cellRoutes
+);
 
 // Swagger Documentation
-// console.log(JSON.stringify(swaggerSpec, null, 2)); // Log the Swagger JSON spec
-
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// Global Error Handler
-app.use((err, req, res, next) => {
-  logger.error(err.stack);
-  res.status(500).json({ error: "Something went wrong!" });
-});
+// Global Error Handler (should be after all routes)
+app.use(errorHandler);
 
 module.exports = app;

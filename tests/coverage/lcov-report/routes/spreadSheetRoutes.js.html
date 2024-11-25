@@ -365,35 +365,11 @@
 <a name='L300'></a><a href='#L300'>300</a>
 <a name='L301'></a><a href='#L301'>301</a>
 <a name='L302'></a><a href='#L302'>302</a>
-<a name='L303'></a><a href='#L303'>303</a>
-<a name='L304'></a><a href='#L304'>304</a>
-<a name='L305'></a><a href='#L305'>305</a>
-<a name='L306'></a><a href='#L306'>306</a>
-<a name='L307'></a><a href='#L307'>307</a>
-<a name='L308'></a><a href='#L308'>308</a>
-<a name='L309'></a><a href='#L309'>309</a>
-<a name='L310'></a><a href='#L310'>310</a>
-<a name='L311'></a><a href='#L311'>311</a>
-<a name='L312'></a><a href='#L312'>312</a>
-<a name='L313'></a><a href='#L313'>313</a>
-<a name='L314'></a><a href='#L314'>314</a>
-<a name='L315'></a><a href='#L315'>315</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
+<a name='L303'></a><a href='#L303'>303</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -691,23 +667,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// routes/spreadsheetRoutes.js
-&nbsp;
-const express = require("express");
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const express = require("express");
 const { body, param } = require("express-validator");
 const spreadsheetController = require("../controllers/spreadsheetController");
 &nbsp;
 const router = express.Router();
-&nbsp;
-// Debugging Logs (Optional: Remove in Production)
-// console.log("spreadsheetController:", spreadsheetController);
-// console.log("createSpreadsheet:", spreadsheetController.createSpreadsheet);
-// console.log("getSpreadsheets:", spreadsheetController.getSpreadsheets);
-// console.log("getSpreadsheetById:", spreadsheetController.getSpreadsheetById);
-// console.log("updateSpreadsheet:", spreadsheetController.updateSpreadsheet);
-// console.log("deleteSpreadsheet:", spreadsheetController.deleteSpreadsheet);
-// console.log("addCollaborator:", spreadsheetController.addCollaborator);
-// console.log("removeCollaborator:", spreadsheetController.removeCollaborator);
 &nbsp;
 /**
  * @swagger
@@ -747,7 +711,7 @@ const router = express.Router();
  *                 spreadsheet:
  *                   $ref: '#/components/schemas/Spreadsheet'
  *       '400':
- *         description: Bad request
+ *         description: Bad request, invalid input
  */
 router.post(
   "/",
@@ -819,7 +783,7 @@ router.get("/", spreadsheetController.getSpreadsheets);
  */
 router.get(
   "/:id",
-  [param("id").isUUID().withMessage("Invalid spreadsheet ID")],
+  [param("id").isUUID().withMessage("Invalid spreadsheet ID format")],
   spreadsheetController.getSpreadsheetById
 );
 &nbsp;
@@ -867,7 +831,7 @@ router.get(
 router.put(
   "/:id",
   [
-    param("id").isUUID().withMessage("Invalid spreadsheet ID"),
+    param("id").isUUID().withMessage("Invalid spreadsheet ID format"),
     body("name")
       .optional()
       .isLength({ min: 1 })
@@ -902,7 +866,7 @@ router.put(
  */
 router.delete(
   "/:id",
-  [param("id").isUUID().withMessage("Invalid spreadsheet ID")],
+  [param("id").isUUID().withMessage("Invalid spreadsheet ID format")],
   spreadsheetController.deleteSpreadsheet
 );
 &nbsp;
@@ -938,7 +902,7 @@ router.delete(
  *       '200':
  *         description: Collaborator added successfully
  *       '400':
- *         description: Bad request
+ *         description: Bad request, invalid input
  *       '403':
  *         description: Access denied
  *       '404':
@@ -947,7 +911,7 @@ router.delete(
 router.post(
   "/:id/add-collaborator",
   [
-    param("id").isUUID().withMessage("Invalid spreadsheet ID"),
+    param("id").isUUID().withMessage("Invalid spreadsheet ID format"),
     body("collaboratorEmail")
       .isEmail()
       .withMessage("Valid collaborator email is required"),
@@ -958,7 +922,7 @@ router.post(
 /**
  * @swagger
  * /spreadsheets/{id}/remove-collaborator:
- *   post:
+ *   delete:
  *     summary: Remove a collaborator from a spreadsheet
  *     tags: [Spreadsheets]
  *     security:
@@ -987,16 +951,16 @@ router.post(
  *       '200':
  *         description: Collaborator removed successfully
  *       '400':
- *         description: Bad request
+ *         description: Bad request, invalid input
  *       '403':
  *         description: Access denied
  *       '404':
  *         description: Spreadsheet or collaborator not found
  */
-router.post(
+router.delete(
   "/:id/remove-collaborator",
   [
-    param("id").isUUID().withMessage("Invalid spreadsheet ID"),
+    param("id").isUUID().withMessage("Invalid spreadsheet ID format"),
     body("collaboratorId")
       .isUUID()
       .withMessage("Valid collaborator ID is required"),
@@ -1012,7 +976,7 @@ module.exports = router;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2024-11-14T20:01:30.560Z
+                at 2024-11-24T19:07:03.554Z
             </div>
         <script src="../prettify.js"></script>
         <script>

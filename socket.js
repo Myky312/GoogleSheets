@@ -150,16 +150,39 @@ const initializeSocket = (server) => {
           return;
         }
 
-        // If the cell contains a formula, evaluate it
+        // Fetch the sheet to ensure it exists
+        const sheet = await Sheet.findOne({
+          where: { id: sheetId, spreadsheetId },
+        });
+
+        if (!sheet) {
+          socket.emit("error", { message: "Sheet not found" });
+          return;
+        }
+
+        // Evaluate the formula if present
         let evaluatedContent = content;
         if (formula && formula.startsWith("=")) {
-          evaluatedContent = await formulaService.evaluateFormula(
+          const evaluationResult = await formulaService.evaluateFormula(
             formula.slice(1),
-            spreadsheetId,
-            sheetId,
-            row,
-            column
+            {
+              spreadsheetId,
+              sheetId,
+              row,
+              column,
+            }
           );
+
+          if (evaluationResult.error) {
+            evaluatedContent = "#ERROR!";
+            // Optionally, send the error back to the client
+            socket.emit("formulaError", {
+              cell: { sheetId, row, column },
+              error: evaluationResult.error,
+            });
+          } else {
+            evaluatedContent = evaluationResult.value;
+          }
         }
 
         // Update or create the cell in the database
@@ -174,22 +197,32 @@ const initializeSocket = (server) => {
 
         if (!created) {
           existingCell.content = evaluatedContent;
-          existingCell.formula = formula || existingCell.formula;
-          existingCell.hyperlink = hyperlink || existingCell.hyperlink;
+          existingCell.formula = formula || null;
+          existingCell.hyperlink = hyperlink || null;
           await existingCell.save();
         }
 
-        // Broadcast the cell update to other clients in the same spreadsheet room
-        socket.to(spreadsheetId).emit("cellUpdated", {
+        // Handle dependencies
+        if (formula && formula.startsWith("=")) {
+          // Update dependencies in the formula service
+          await formulaService.updateDependencies(
+            existingCell,
+            formula.slice(1)
+          );
+        } else {
+          // If formula is removed, clear dependencies
+          await formulaService.clearDependencies(existingCell);
+        }
+
+        // Recalculate dependent cells
+        const affectedCells = await formulaService.recalculateDependentCells(
+          existingCell
+        );
+
+        // Broadcast the cell updates to other clients in the same spreadsheet room
+        io.to(spreadsheetId).emit("cellsUpdated", {
           spreadsheetId,
-          cell: {
-            sheetId,
-            row,
-            column,
-            content: evaluatedContent,
-            formula: formula || null,
-            hyperlink: hyperlink || null,
-          },
+          cells: [existingCell, ...affectedCells],
         });
       } catch (error) {
         logger.error(`Error handling cellUpdate: ${error.message}`);

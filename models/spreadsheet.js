@@ -24,6 +24,13 @@ module.exports = (sequelize) => {
         as: "Owner",
       });
     }
+
+    async hasCollaborator(userId) {
+      const collaborators = await this.getCollaborators({
+        where: { id: userId },
+      });
+      return collaborators.length > 0;
+    }
   }
 
   Spreadsheet.init(

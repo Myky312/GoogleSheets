@@ -36,10 +36,14 @@ const options = {
         name: "Spreadsheets",
         description: "Endpoints related to spreadsheet management",
       },
+      {
+        name: "Sheets",
+        description: "Endpoits realated to sheet management",
+      },
     ],
     components: {
       securitySchemes: {
-        BearerAuth: {
+        bearerAuth: {
           type: "http",
           scheme: "bearer",
           bearerFormat: "JWT",
@@ -138,10 +142,49 @@ const options = {
           },
           required: ["collaboratorId"],
         },
+        Cell: {
+          type: "object",
+          properties: {
+            id: {
+              type: "string",
+              format: "uuid",
+              description: "Unique identifier of the cell",
+            },
+            sheetId: {
+              type: "string",
+              format: "uuid",
+              description: "Identifier of the sheet the cell belongs to",
+            },
+            row: {
+              type: "integer",
+              description: "Row number of the cell",
+            },
+            column: {
+              type: "integer",
+              description: "Column number of the cell",
+            },
+            content: {
+              type: "string",
+              nullable: true,
+              description: "Content of the cell",
+            },
+            formula: {
+              type: "string",
+              nullable: true,
+              description: "Formula in the cell",
+            },
+            hyperlink: {
+              type: "string",
+              nullable: true,
+              description: "Hyperlink in the cell",
+            },
+          },
+          required: ["id", "sheetId", "row", "column"],
+        },
       },
     },
   },
-  apis: [path.join(__dirname, "../routes/*.js")], // Path to your route files with JSDoc comments
+  apis: [path.join(__dirname, "../routes/**/*.js")],
 };
 
 const swaggerSpec = swaggerJSDoc(options);

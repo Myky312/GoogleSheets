@@ -114,9 +114,7 @@ router.get("/", spreadsheetController.getSpreadsheets);
  */
 router.get(
   "/:id",
-  [
-    param("id").isUUID().withMessage("Invalid spreadsheet ID format"),
-  ],
+  [param("id").isUUID().withMessage("Invalid spreadsheet ID format")],
   spreadsheetController.getSpreadsheetById
 );
 
@@ -199,9 +197,7 @@ router.put(
  */
 router.delete(
   "/:id",
-  [
-    param("id").isUUID().withMessage("Invalid spreadsheet ID format"),
-  ],
+  [param("id").isUUID().withMessage("Invalid spreadsheet ID format")],
   spreadsheetController.deleteSpreadsheet
 );
 
