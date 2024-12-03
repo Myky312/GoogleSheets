@@ -16,10 +16,10 @@ const authenticate = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findByPk(decoded.id);
+    const user = await User.findByPk(decoded.userId);
 
     if (!user) {
-      logger.warn(`User not found: ID ${decoded.id}`);
+      logger.warn(`User not found: ID ${decoded.userId}`);
       return res.status(401).json({ error: "Unauthorized - User not found" });
     }
 
