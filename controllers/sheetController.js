@@ -36,6 +36,17 @@ exports.createSheet = async (req, res, next) => {
       }
     }
 
+    // Check for duplicate sheet name
+    const existingSheet = await Sheet.findOne({
+      where: { spreadsheetId, name },
+    });
+
+    if (existingSheet) {
+      return res
+        .status(400)
+        .json({ message: "Sheet with this name already exists" });
+    }
+
     // Create the sheet
     const sheet = await Sheet.create({ spreadsheetId, name });
 

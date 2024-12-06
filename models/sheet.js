@@ -47,6 +47,12 @@ module.exports = (sequelize) => {
       modelName: "Sheet",
       tableName: "Sheets",
       timestamps: true,
+      indexes: [
+        {
+          unique: true,
+          fields: ["spreadsheetId", "name"],
+        },
+      ],
     }
   );
 

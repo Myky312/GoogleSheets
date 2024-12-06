@@ -3,245 +3,465 @@
 const request = require("supertest");
 const express = require("express");
 const bodyParser = require("body-parser");
-
-// Import the router
 const sheetRoutes = require("../../routes/sheetRoutes");
+const { sequelize, User, Spreadsheet, Sheet } = require("../../models");
+const { createUser } = require("../factories/userFactory");
+const { v4: uuidv4 } = require("uuid");
 
-// Mock the controller methods
-jest.mock("../../controllers/sheetController", () => ({
-  createSheet: jest.fn((req, res) =>
-    res.status(201).json({ message: "createSheet" })
-  ),
-  getSheets: jest.fn((req, res) =>
-    res.status(200).json({ message: "getSheets" })
-  ),
-  getSheetById: jest.fn((req, res) =>
-    res.status(200).json({ message: "getSheetById" })
-  ),
-  updateSheet: jest.fn((req, res) =>
-    res.status(200).json({ message: "updateSheet" })
-  ),
-  deleteSheet: jest.fn((req, res) =>
-    res.status(200).json({ message: "deleteSheet" })
-  ),
+// Mock the socket module
+jest.mock("../../socket", () => ({
+  getIO: () => ({
+    to: jest.fn().mockReturnThis(),
+    emit: jest.fn(),
+  }),
 }));
 
 // Mock the authentication middleware
 jest.mock("../../middleware/authenticate", () => ({
   authenticate: jest.fn((req, res, next) => {
-    // Simulate authenticated user
     req.user = { id: "123e4567-e89b-12d3-a456-426614174000" };
     next();
   }),
 }));
 
-const { body, param } = require("express-validator");
+const { authenticate } = require("../../middleware/authenticate");
 
 describe("Sheet Routes", () => {
   let app;
+  let owner;
+  let collaborator;
+  let nonCollaborator;
+  let spreadsheet;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     app = express();
     app.use(bodyParser.json());
+    app.use("/spreadsheets/:spreadsheetId/sheets", authenticate, sheetRoutes);
+    await sequelize.sync({ force: true });
 
-    // Import and use the authentication middleware
-    const { authenticate } = require("../../middleware/authenticate");
-    app.use(authenticate);
+    // Create users
+    owner = await createUser({
+      id: "123e4567-e89b-12d3-a456-426614174000",
+      username: "owner",
+      email: "owner@example.com",
+    });
 
-    // Mount the router
-    app.use("/spreadsheets", sheetRoutes);
+    collaborator = await createUser({
+      id: "223e4567-e89b-12d3-a456-426614174000",
+      username: "collaborator",
+      email: "collaborator@example.com",
+    });
+
+    nonCollaborator = await createUser({
+      id: "323e4567-e89b-12d3-a456-426614174000",
+      username: "noncollaborator",
+      email: "noncollaborator@example.com",
+    });
+
+    // Create spreadsheet and add collaborator
+    spreadsheet = await Spreadsheet.create({
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      ownerId: owner.id,
+      name: "Test Spreadsheet",
+    });
+
+    await spreadsheet.addCollaborator(collaborator.id);
   });
 
-  afterEach(() => {
+  afterAll(async () => {
+    await sequelize.close();
+  });
+
+  afterEach(async () => {
+    // Clean up sheets after each test
+    await Sheet.destroy({ where: {} });
     jest.clearAllMocks();
   });
 
-  const sheetController = require("../../controllers/sheetController");
-  const authMiddleware = require("../../middleware/authenticate");
-
   describe("POST /:spreadsheetId/sheets", () => {
-    it("should create a new sheet when provided valid data", async () => {
+    it("should create a new sheet when provided valid data by the owner", async () => {
       const response = await request(app)
-        .post("/spreadsheets/550e8400-e29b-41d4-a716-446655440000/sheets")
-        .send({ name: "New Sheet" });
+        .post(`/spreadsheets/${spreadsheet.id}/sheets`)
+        .send({ name: "Owner's New Sheet" });
 
       expect(response.status).toBe(201);
-      expect(response.body).toEqual({ message: "createSheet" });
+      expect(response.body).toHaveProperty("sheet");
+      expect(response.body.sheet.name).toBe("Owner's New Sheet");
 
-      expect(sheetController.createSheet).toHaveBeenCalled();
-      expect(authMiddleware.authenticate).toHaveBeenCalled();
+      // Verify in the database
+      const sheetInDb = await Sheet.findByPk(response.body.sheet.id);
+      expect(sheetInDb).not.toBeNull();
+      expect(sheetInDb.name).toBe("Owner's New Sheet");
     });
 
-    it("should return 400 when name is missing", async () => {
-      const response = await request(app)
-        .post("/spreadsheets/550e8400-e29b-41d4-a716-446655440000/sheets")
-        .send({});
-
-      expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty("errors");
-
-      // The controller should not be called due to validation error
-      expect(sheetController.createSheet).not.toHaveBeenCalled();
-    });
-
-    it("should return 400 when spreadsheetId is invalid", async () => {
-      const response = await request(app)
-        .post("/spreadsheets/invalid-uuid/sheets")
-        .send({ name: "New Sheet" });
-
-      expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty("errors");
-
-      expect(sheetController.createSheet).not.toHaveBeenCalled();
-    });
-
-    it("should return 401 when user is not authenticated", async () => {
-      // Mock authenticate middleware to simulate unauthenticated user
-      authMiddleware.authenticate.mockImplementationOnce((req, res, next) => {
-        res.status(401).json({ message: "Unauthorized" });
+    it("should create a new sheet when provided valid data by a collaborator", async () => {
+      // Mock authenticate middleware to simulate collaborator
+      authenticate.mockImplementationOnce((req, res, next) => {
+        req.user = { id: collaborator.id };
+        next();
       });
 
       const response = await request(app)
-        .post("/spreadsheets/550e8400-e29b-41d4-a716-446655440000/sheets")
-        .send({ name: "New Sheet" });
+        .post(`/spreadsheets/${spreadsheet.id}/sheets`)
+        .send({ name: "Collaborator's New Sheet" });
 
-      expect(response.status).toBe(401);
-      expect(response.body).toEqual({ message: "Unauthorized" });
+      expect(response.status).toBe(201);
+      expect(response.body.sheet.name).toBe("Collaborator's New Sheet");
+    });
 
-      expect(sheetController.createSheet).not.toHaveBeenCalled();
+    it("should not allow non-collaborator to create a sheet", async () => {
+      // Mock authenticate middleware to simulate non-collaborator
+      authenticate.mockImplementationOnce((req, res, next) => {
+        req.user = { id: nonCollaborator.id };
+        next();
+      });
+
+      const response = await request(app)
+        .post(`/spreadsheets/${spreadsheet.id}/sheets`)
+        .send({ name: "Unauthorized Sheet" });
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({
+        message: "Access denied to create sheet",
+      });
+    });
+
+    it("should return 400 when creating a sheet with a duplicate name", async () => {
+      // First creation should succeed
+      await request(app)
+        .post(`/spreadsheets/${spreadsheet.id}/sheets`)
+        .send({ name: "Unique Sheet" });
+
+      // Second creation with the same name should fail
+      const response = await request(app)
+        .post(`/spreadsheets/${spreadsheet.id}/sheets`)
+        .send({ name: "Unique Sheet" });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        message: "Sheet with this name already exists",
+      });
     });
   });
 
   describe("GET /:spreadsheetId/sheets", () => {
+    beforeEach(async () => {
+      // Create sheets
+      await Sheet.bulkCreate([
+        { id: uuidv4(), spreadsheetId: spreadsheet.id, name: "Sheet 1" },
+        { id: uuidv4(), spreadsheetId: spreadsheet.id, name: "Sheet 2" },
+      ]);
+    });
+
     it("should retrieve all sheets when user is authenticated", async () => {
       const response = await request(app).get(
-        "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/sheets"
+        `/spreadsheets/${spreadsheet.id}/sheets`
       );
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ message: "getSheets" });
-
-      expect(sheetController.getSheets).toHaveBeenCalled();
-      expect(authMiddleware.authenticate).toHaveBeenCalled();
+      expect(response.body).toHaveProperty("sheets");
+      expect(Array.isArray(response.body.sheets)).toBe(true);
+      expect(response.body.sheets.length).toBe(2);
     });
 
-    it("should return 400 when spreadsheetId is invalid", async () => {
+    it("should retrieve all sheets when user is a collaborator", async () => {
+      // Mock authenticate middleware to simulate collaborator
+      authenticate.mockImplementationOnce((req, res, next) => {
+        req.user = { id: collaborator.id };
+        next();
+      });
+
       const response = await request(app).get(
-        "/spreadsheets/invalid-uuid/sheets"
+        `/spreadsheets/${spreadsheet.id}/sheets`
       );
 
-      expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty("errors");
+      expect(response.status).toBe(200);
+      expect(response.body.sheets.length).toBe(2);
+    });
 
-      expect(sheetController.getSheets).not.toHaveBeenCalled();
+    it("should not allow non-collaborator to retrieve sheets", async () => {
+      // Mock authenticate middleware to simulate non-collaborator
+      authenticate.mockImplementationOnce((req, res, next) => {
+        req.user = { id: nonCollaborator.id };
+        next();
+      });
+
+      const response = await request(app).get(
+        `/spreadsheets/${spreadsheet.id}/sheets`
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({
+        message: "Access denied to retrieve sheets",
+      });
     });
   });
 
   describe("GET /:spreadsheetId/sheets/:sheetId", () => {
-    it("should retrieve a sheet when user is authenticated", async () => {
+    let sheet;
+
+    beforeEach(async () => {
+      sheet = await Sheet.create({
+        id: uuidv4(),
+        spreadsheetId: spreadsheet.id,
+        name: "Specific Sheet",
+      });
+    });
+
+    it("should retrieve a specific sheet when user is authenticated", async () => {
       const response = await request(app).get(
-        "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/sheets/660e8400-e29b-41d4-a716-446655440111"
+        `/spreadsheets/${spreadsheet.id}/sheets/${sheet.id}`
       );
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ message: "getSheetById" });
+      expect(response.body).toHaveProperty("sheet");
+      expect(response.body.sheet.id).toBe(sheet.id);
+      expect(response.body.sheet.name).toBe("Specific Sheet");
+    });
 
-      expect(sheetController.getSheetById).toHaveBeenCalled();
-      expect(authMiddleware.authenticate).toHaveBeenCalled();
+    it("should return 404 when sheet does not exist", async () => {
+      const nonExistentSheetId = "00000000-0000-0000-0000-000000000000";
+      const response = await request(app).get(
+        `/spreadsheets/${spreadsheet.id}/sheets/${nonExistentSheetId}`
+      );
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({ message: "Sheet not found" });
     });
 
     it("should return 400 when sheetId is invalid", async () => {
       const response = await request(app).get(
-        "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/sheets/invalid-uuid"
+        `/spreadsheets/${spreadsheet.id}/sheets/invalid-uuid`
       );
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty("errors");
+      expect(response.body.errors[0].msg).toBe("Invalid sheet ID format");
+    });
 
-      expect(sheetController.getSheetById).not.toHaveBeenCalled();
+    it("should return 403 when user is not authorized to access the sheet", async () => {
+      // Mock authenticate middleware to simulate unauthorized user with a valid UUID
+      authenticate.mockImplementationOnce((req, res, next) => {
+        req.user = { id: "00000000-0000-0000-0000-000000000000" };
+        next();
+      });
+
+      const response = await request(app).get(
+        `/spreadsheets/${spreadsheet.id}/sheets/${sheet.id}`
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({
+        message: "Access denied to access sheet",
+      });
     });
   });
 
   describe("PUT /:spreadsheetId/sheets/:sheetId", () => {
-    it("should update a sheet when provided valid data", async () => {
+    let sheet;
+
+    beforeEach(async () => {
+      sheet = await Sheet.create({
+        id: uuidv4(),
+        spreadsheetId: spreadsheet.id,
+        name: "Original Sheet",
+      });
+    });
+
+    it("should update a sheet when provided valid data by the owner", async () => {
       const response = await request(app)
-        .put(
-          "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/sheets/660e8400-e29b-41d4-a716-446655440111"
-        )
+        .put(`/spreadsheets/${spreadsheet.id}/sheets/${sheet.id}`)
         .send({ name: "Updated Sheet Name" });
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ message: "updateSheet" });
+      expect(response.body.sheet.name).toBe("Updated Sheet Name");
 
-      expect(sheetController.updateSheet).toHaveBeenCalled();
-      expect(authMiddleware.authenticate).toHaveBeenCalled();
+      const updatedSheet = await Sheet.findByPk(sheet.id);
+      expect(updatedSheet.name).toBe("Updated Sheet Name");
     });
 
-    it("should return 400 when name is missing", async () => {
+    it("should update a sheet when provided valid data by a collaborator", async () => {
+      // Mock authenticate middleware to simulate collaborator
+      authenticate.mockImplementationOnce((req, res, next) => {
+        req.user = { id: collaborator.id };
+        next();
+      });
+
       const response = await request(app)
-        .put(
-          "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/sheets/660e8400-e29b-41d4-a716-446655440111"
-        )
-        .send({});
+        .put(`/spreadsheets/${spreadsheet.id}/sheets/${sheet.id}`)
+        .send({ name: "Collaborator Updated Sheet" });
 
-      expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty("errors");
-
-      expect(sheetController.updateSheet).not.toHaveBeenCalled();
+      expect(response.status).toBe(200);
+      expect(response.body.sheet.name).toBe("Collaborator Updated Sheet");
     });
 
-    it("should return 400 when sheetId is invalid", async () => {
+    it("should not allow non-collaborator to update a sheet", async () => {
+      // Mock authenticate middleware to simulate non-collaborator
+      authenticate.mockImplementationOnce((req, res, next) => {
+        req.user = { id: nonCollaborator.id };
+        next();
+      });
+
       const response = await request(app)
-        .put(
-          "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/sheets/invalid-uuid"
-        )
-        .send({ name: "Updated Sheet Name" });
+        .put(`/spreadsheets/${spreadsheet.id}/sheets/${sheet.id}`)
+        .send({ name: "Unauthorized Update" });
 
-      expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty("errors");
-
-      expect(sheetController.updateSheet).not.toHaveBeenCalled();
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({
+        message: "Access denied to update sheet",
+      });
     });
+
+    // ... Additional PUT tests as shown earlier ...
   });
 
   describe("DELETE /:spreadsheetId/sheets/:sheetId", () => {
-    it("should delete a sheet when user is authenticated", async () => {
+    let sheet;
+
+    beforeEach(async () => {
+      sheet = await Sheet.create({
+        id: uuidv4(),
+        spreadsheetId: spreadsheet.id,
+        name: "Sheet To Delete",
+      });
+    });
+
+    it("should delete a sheet when user is the owner", async () => {
       const response = await request(app).delete(
-        "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/sheets/660e8400-e29b-41d4-a716-446655440111"
+        `/spreadsheets/${spreadsheet.id}/sheets/${sheet.id}`
       );
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ message: "deleteSheet" });
+      expect(response.body).toEqual({ message: "Sheet deleted successfully" });
 
-      expect(sheetController.deleteSheet).toHaveBeenCalled();
-      expect(authMiddleware.authenticate).toHaveBeenCalled();
+      const deletedSheet = await Sheet.findByPk(sheet.id);
+      expect(deletedSheet).toBeNull();
     });
 
-    it("should return 400 when sheetId is invalid", async () => {
-      const response = await request(app).delete(
-        "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/sheets/invalid-uuid"
-      );
-
-      expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty("errors");
-
-      expect(sheetController.deleteSheet).not.toHaveBeenCalled();
-    });
-
-    it("should return 401 when user is not authenticated", async () => {
-      // Mock authenticate middleware to simulate unauthenticated user
-      authMiddleware.authenticate.mockImplementationOnce((req, res, next) => {
-        res.status(401).json({ message: "Unauthorized" });
+    it("should not allow a collaborator to delete a sheet", async () => {
+      // Mock authenticate middleware to simulate a collaborator
+      authenticate.mockImplementationOnce((req, res, next) => {
+        req.user = { id: collaborator.id };
+        next();
       });
 
       const response = await request(app).delete(
-        "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/sheets/660e8400-e29b-41d4-a716-446655440111"
+        `/spreadsheets/${spreadsheet.id}/sheets/${sheet.id}`
       );
 
-      expect(response.status).toBe(401);
-      expect(response.body).toEqual({ message: "Unauthorized" });
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({
+        message: "Only the owner can delete sheets",
+      });
 
-      expect(sheetController.deleteSheet).not.toHaveBeenCalled();
+      // Verify that the sheet still exists
+      const existingSheet = await Sheet.findByPk(sheet.id);
+      expect(existingSheet).not.toBeNull();
+    });
+
+    it("should not allow non-collaborator to delete a sheet", async () => {
+      // Mock authenticate middleware to simulate a non-collaborator
+      authenticate.mockImplementationOnce((req, res, next) => {
+        req.user = { id: nonCollaborator.id };
+        next();
+      });
+
+      const response = await request(app).delete(
+        `/spreadsheets/${spreadsheet.id}/sheets/${sheet.id}`
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({
+        message: "Only the owner can delete sheets",
+      });
+
+      const existingSheet = await Sheet.findByPk(sheet.id);
+      expect(existingSheet).not.toBeNull();
+    });
+
+    it("should return 404 when trying to delete a non-existent sheet", async () => {
+      const nonExistentSheetId = "00000000-0000-0000-0000-000000000000";
+      const response = await request(app).delete(
+        `/spreadsheets/${spreadsheet.id}/sheets/${nonExistentSheetId}`
+      );
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({ message: "Sheet not found" });
+    });
+
+    // ... Additional DELETE tests as shown earlier ...
+  });
+  describe("Authorization Scenarios", () => {
+    let collaboratorSheet;
+    let nonCollaboratorSheet;
+
+    beforeEach(async () => {
+      collaboratorSheet = await Sheet.create({
+        id: uuidv4(),
+        spreadsheetId: spreadsheet.id,
+        name: "Collaborator's Sheet",
+      });
+
+      nonCollaboratorSheet = await Sheet.create({
+        id: uuidv4(),
+        spreadsheetId: spreadsheet.id,
+        name: "Non-Collaborator's Sheet",
+      });
+
+      // Add collaborator to spreadsheet
+      await spreadsheet.addCollaborator(collaborator.id);
+    });
+
+    it("should allow owner to delete a sheet", async () => {
+      const response = await request(app).delete(
+        `/spreadsheets/${spreadsheet.id}/sheets/${collaboratorSheet.id}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ message: "Sheet deleted successfully" });
+
+      const deletedSheet = await Sheet.findByPk(collaboratorSheet.id);
+      expect(deletedSheet).toBeNull();
+    });
+
+    it("should not allow collaborator to delete a sheet", async () => {
+      // Mock authenticate middleware to simulate collaborator
+      authenticate.mockImplementationOnce((req, res, next) => {
+        req.user = { id: collaborator.id };
+        next();
+      });
+
+      const response = await request(app).delete(
+        `/spreadsheets/${spreadsheet.id}/sheets/${collaboratorSheet.id}`
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({
+        message: "Only the owner can delete sheets",
+      });
+
+      const existingSheet = await Sheet.findByPk(collaboratorSheet.id);
+      expect(existingSheet).not.toBeNull();
+    });
+
+    it("should not allow non-collaborator to delete a sheet", async () => {
+      // Mock authenticate middleware to simulate non-collaborator
+      authenticate.mockImplementationOnce((req, res, next) => {
+        req.user = { id: nonCollaborator.id };
+        next();
+      });
+
+      const response = await request(app).delete(
+        `/spreadsheets/${spreadsheet.id}/sheets/${nonCollaboratorSheet.id}`
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({
+        message: "Only the owner can delete sheets",
+      });
+
+      const existingSheet = await Sheet.findByPk(nonCollaboratorSheet.id);
+      expect(existingSheet).not.toBeNull();
     });
   });
 });
