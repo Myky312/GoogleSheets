@@ -4,11 +4,7 @@ const express = require("express");
 const router = express.Router({ mergeParams: true });
 const { body, param } = require("express-validator");
 const cellController = require("../controllers/cellController");
-const authenticate = require("../middleware/authenticate");
 const validateRequest = require("../middleware/validateRequest");
-
-// Apply authentication middleware to all routes
-router.use(authenticate);
 
 /**
  * @swagger

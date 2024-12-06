@@ -55,7 +55,6 @@ app.use("/spreadsheets/:spreadsheetId/sheets", authenticate, sheetRoutes);
 
 app.use(
   "/spreadsheets/:spreadsheetId/sheets/:sheetId/cells",
-  authenticate,
   cellRoutes
 );
 
