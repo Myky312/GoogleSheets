@@ -5,7 +5,7 @@ const { body, param } = require("express-validator");
 const sheetController = require("../controllers/sheetController");
 const validateRequest = require("../middleware/validateRequest");
 
-const router = express.Router();
+const router = express.Router({ mergeParams: true });
 
 /**
  * @swagger
@@ -60,9 +60,9 @@ const router = express.Router();
  *         description: Spreadsheet not found
  */
 router.post(
-  "/:id/sheets",
+  "/",
   [
-    param("id").isUUID().withMessage("Invalid spreadsheet ID format"),
+    param("spreadsheetId").isUUID().withMessage("Invalid spreadsheet ID format"),
     body("name").isLength({ min: 1 }).withMessage("Sheet name is required"),
     validateRequest,
   ],
@@ -103,9 +103,9 @@ router.post(
  *         description: Spreadsheet not found
  */
 router.get(
-  "/:id/sheets",
+  "/",
   [
-    param("id").isUUID().withMessage("Invalid spreadsheet ID format"),
+    param("spreadsheetId").isUUID().withMessage("Invalid spreadsheet ID format"),
     validateRequest,
   ],
   sheetController.getSheets
@@ -150,9 +150,9 @@ router.get(
  *         description: Sheet not found
  */
 router.get(
-  "/:id/sheets/:sheetId",
+  "/:sheetId",
   [
-    param("id").isUUID().withMessage("Invalid spreadsheet ID format"),
+    param("spreadsheetId").isUUID().withMessage("Invalid spreadsheet ID format"),
     param("sheetId").isUUID().withMessage("Invalid sheet ID format"),
     validateRequest,
   ],
@@ -212,9 +212,9 @@ router.get(
  *         description: Sheet not found
  */
 router.put(
-  "/:id/sheets/:sheetId",
+  "/:sheetId",
   [
-    param("id").isUUID().withMessage("Invalid spreadsheet ID format"),
+    param("spreadsheetId").isUUID().withMessage("Invalid spreadsheet ID format"),
     param("sheetId").isUUID().withMessage("Invalid sheet ID format"),
     body("name").isLength({ min: 1 }).withMessage("Sheet name is required"),
     validateRequest,
@@ -254,9 +254,9 @@ router.put(
  *         description: Sheet not found
  */
 router.delete(
-  "/:id/sheets/:sheetId",
+  "/:sheetId",
   [
-    param("id").isUUID().withMessage("Invalid spreadsheet ID format"),
+    param("spreadsheetId").isUUID().withMessage("Invalid spreadsheet ID format"),
     param("sheetId").isUUID().withMessage("Invalid sheet ID format"),
     validateRequest,
   ],
