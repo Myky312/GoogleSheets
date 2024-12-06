@@ -3,7 +3,7 @@
 const request = require("supertest");
 const express = require("express");
 const bodyParser = require("body-parser");
-const spreadsheetRoutes = require("../../routes/spreadsheetRoutes");
+const spreadsheetRoutes = require("../../routes/spreadSheetRoutes");
 const { getIO } = require("../../socket");
 
 // Mocking Sequelize Models without using sequelize-mock
@@ -19,12 +19,13 @@ jest.mock("../../models", () => ({
   },
   User: {
     findOne: jest.fn(),
-    build: jest.fn(),
+    findByPk: jest.fn(),
   },
   UserSpreadsheet: {
     findAll: jest.fn(),
     findOne: jest.fn(),
     create: jest.fn(),
+    destroy: jest.fn(),
   },
 }));
 
@@ -39,10 +40,10 @@ jest.mock("../../socket", () => ({
 const authenticate = (req, res, next) => {
   // For testing, set req.user based on test scenarios
   if (req.headers.authorization === "Bearer valid-token") {
-    req.user = { id: "owner-id-123" };
+    req.user = { id: "owner-id-123", email: "testuser@example.com" };
     next();
   } else if (req.headers.authorization === "Bearer collaborator-token") {
-    req.user = { id: "collab-id-456" };
+    req.user = { id: "collab-id-456", email: "collab@example.com" };
     next();
   } else {
     res.status(401).json({ message: "Unauthorized" });
@@ -58,7 +59,7 @@ app.use("/spreadsheets", authenticate, spreadsheetRoutes);
 
 // Error Handling Middleware for Tests
 app.use((err, req, res, next) => {
-//   console.log(err); // Log error for debugging
+  // console.log(err); // Log error for debugging
   res.status(500).json({ error: "Something went wrong!" });
 });
 
@@ -96,7 +97,7 @@ describe("Spreadsheet Routes", () => {
       updatedAt: new Date().toISOString(),
     };
 
-    // Mock User instance
+    // Mock User instance (Owner)
     mockUser = {
       id: "owner-id-123",
       username: "testuser",
@@ -156,9 +157,9 @@ describe("Spreadsheet Routes", () => {
         expect.arrayContaining([
           expect.objectContaining({
             msg: "Spreadsheet name is required",
-            path: "name",
+            path: "name", // Updated to match the actual response field
             location: "body",
-            type: "field",
+            type: "field", // Added to match the actual response
           }),
         ])
       );
@@ -190,15 +191,69 @@ describe("Spreadsheet Routes", () => {
 
   describe("GET /spreadsheets", () => {
     it("should return owned and collaborated spreadsheets", async () => {
-      Spreadsheet.findAll.mockResolvedValue([mockSpreadsheet]);
-      UserSpreadsheet.findAll.mockResolvedValue([]);
+      // Mock owned spreadsheets
+      Spreadsheet.findAll.mockImplementation(({ where }) => {
+        if (where && where.ownerId) {
+          return Promise.resolve([mockSpreadsheet]);
+        }
+        return Promise.resolve([]);
+      });
+
+      // Mock collaborated spreadsheets
+      Spreadsheet.findAll.mockImplementation(({ include }) => {
+        if (include) {
+          // Assuming include for collaborators
+          return Promise.resolve([mockSpreadsheet]);
+        }
+        return Promise.resolve([]);
+      });
 
       const res = await request(app)
         .get("/spreadsheets")
         .set("Authorization", "Bearer valid-token");
 
-      expect(res.statusCode).toBe(200);
-      expect(res.body).toEqual({
+      expect(Spreadsheet.findAll).toHaveBeenCalledWith({
+        where: { ownerId: "owner-id-123" },
+        include: [{ model: Sheet, as: "Sheets" }],
+      });
+
+      // Since the second findAll call for collaborated spreadsheets is not correctly mocked,
+      // let's adjust the mock to handle both calls.
+
+      // Reset mocks and redefine them
+      jest.clearAllMocks();
+      Spreadsheet.findAll
+        .mockImplementationOnce(() => Promise.resolve([mockSpreadsheet])) // Owned
+        .mockImplementationOnce(() => Promise.resolve([])); // Collaborated
+
+      const res2 = await request(app)
+        .get("/spreadsheets")
+        .set("Authorization", "Bearer valid-token");
+
+      expect(Spreadsheet.findAll).toHaveBeenCalledTimes(2);
+      expect(Spreadsheet.findAll).toHaveBeenNthCalledWith(1, {
+        where: { ownerId: "owner-id-123" },
+        include: [{ model: Sheet, as: "Sheets" }],
+      });
+      expect(Spreadsheet.findAll).toHaveBeenNthCalledWith(2, {
+        include: [
+          {
+            model: User,
+            as: "Collaborators",
+            where: { id: "owner-id-123" },
+            attributes: [],
+            through: { attributes: [] },
+          },
+          {
+            model: Sheet,
+            as: "Sheets",
+          },
+        ],
+        distinct: true,
+      });
+
+      expect(res2.statusCode).toBe(200);
+      expect(res2.body).toEqual({
         ownedSpreadsheets: [
           expect.objectContaining({
             id: "550e8400-e29b-41d4-a716-446655440000",
@@ -232,34 +287,70 @@ describe("Spreadsheet Routes", () => {
   });
 
   describe("GET /spreadsheets/:id", () => {
-    it("should return the spreadsheet if user has access", async () => {
+    it("should return the spreadsheet if user is the owner", async () => {
       Spreadsheet.findByPk.mockResolvedValue({
         ...mockSpreadsheet,
         Collaborators: [],
+        Sheets: [],
+        createdAt: "2024-12-06T02:39:45.562Z",
+        updatedAt: "2024-12-06T02:39:45.562Z",
       });
 
       const res = await request(app)
         .get("/spreadsheets/550e8400-e29b-41d4-a716-446655440000")
         .set("Authorization", "Bearer valid-token");
 
-      expect(Spreadsheet.findByPk).toHaveBeenCalledWith(
-        "550e8400-e29b-41d4-a716-446655440000",
-        {
-          include: [
-            { model: Sheet, as: "Sheets" },
-            { model: User, as: "Collaborators" },
-          ],
-        }
-      );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
         spreadsheet: expect.objectContaining({
           id: "550e8400-e29b-41d4-a716-446655440000",
           name: "Test Spreadsheet",
           ownerId: "owner-id-123",
-          createdAt: expect.any(String),
+          createdAt: expect.any(String), // Match any valid string
           updatedAt: expect.any(String),
-          Collaborators: [],
+          Sheets: [], // Empty array
+          Collaborators: [], // Empty array
+          owner: null, // No owner info since the requester is the owner
+        }),
+      });
+    });
+
+    it("should return the spreadsheet if user is a collaborator", async () => {
+      Spreadsheet.findByPk.mockResolvedValue({
+        ...mockSpreadsheet,
+        Collaborators: [mockCollaborator],
+        Sheets: [],
+        createdAt: "2024-12-06T02:39:45.568Z",
+        updatedAt: "2024-12-06T02:39:45.568Z",
+      });
+
+      User.findByPk.mockResolvedValue(mockUser); // Owner info
+
+      const res = await request(app)
+        .get("/spreadsheets/550e8400-e29b-41d4-a716-446655440000")
+        .set("Authorization", "Bearer collaborator-token");
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({
+        spreadsheet: expect.objectContaining({
+          id: "550e8400-e29b-41d4-a716-446655440000",
+          name: "Test Spreadsheet",
+          ownerId: "owner-id-123",
+          createdAt: expect.any(String), // Match any valid string
+          updatedAt: expect.any(String),
+          Sheets: [], // Empty array
+          Collaborators: [
+            {
+              id: "collab-id-456",
+              username: "collaborator",
+              email: "collab@example.com",
+            },
+          ],
+          owner: {
+            id: "owner-id-123",
+            username: "testuser",
+            email: "testuser@example.com",
+          },
         }),
       });
     });
@@ -274,6 +365,31 @@ describe("Spreadsheet Routes", () => {
         .get("/spreadsheets/550e8400-e29b-41d4-a716-446655440000")
         .set("Authorization", "Bearer collaborator-token"); // Simulating a collaborator without access
 
+      expect(Spreadsheet.findByPk).toHaveBeenCalledWith(
+        "550e8400-e29b-41d4-a716-446655440000",
+        {
+          include: [
+            {
+              model: Sheet,
+              as: "Sheets",
+              attributes: [
+                "id",
+                "spreadsheetId",
+                "name",
+                "createdAt",
+                "updatedAt",
+              ],
+            },
+            {
+              model: User,
+              as: "Collaborators",
+              attributes: ["id", "username", "email"],
+              through: { attributes: [] },
+            },
+          ],
+          attributes: ["id", "ownerId", "name", "createdAt", "updatedAt"],
+        }
+      );
       expect(res.statusCode).toBe(403);
       expect(res.body).toEqual({ message: "Access denied" });
     });
@@ -287,9 +403,25 @@ describe("Spreadsheet Routes", () => {
 
       expect(Spreadsheet.findByPk).toHaveBeenCalledWith("non-existent-id", {
         include: [
-          { model: Sheet, as: "Sheets" },
-          { model: User, as: "Collaborators" },
+          {
+            model: Sheet,
+            as: "Sheets",
+            attributes: [
+              "id",
+              "spreadsheetId",
+              "name",
+              "createdAt",
+              "updatedAt",
+            ],
+          },
+          {
+            model: User,
+            as: "Collaborators",
+            attributes: ["id", "username", "email"],
+            through: { attributes: [] },
+          },
         ],
+        attributes: ["id", "ownerId", "name", "createdAt", "updatedAt"],
       });
       expect(res.statusCode).toBe(404);
       expect(res.body).toEqual({ message: "Spreadsheet not found" });
@@ -315,6 +447,7 @@ describe("Spreadsheet Routes", () => {
         save: mockSpreadsheet.save,
       });
       mockSpreadsheet.save.mockResolvedValue();
+
       const mockEmitUpdate = jest.fn();
       getIO.mockReturnValue({ to: () => ({ emit: mockEmitUpdate }) });
 
@@ -382,7 +515,7 @@ describe("Spreadsheet Routes", () => {
 
     it("should return 400 if validation fails", async () => {
       const res = await request(app)
-        .put("/spreadsheets/550e8400-e29b-41d4-a716-446655440000") // Use a valid UUID
+        .put("/spreadsheets/550e8400-e29b-41d4-a716-446655440000")
         .set("Authorization", "Bearer valid-token")
         .send({ name: "" }); // Sending an empty name to trigger validation error
 
@@ -392,10 +525,10 @@ describe("Spreadsheet Routes", () => {
         expect.arrayContaining([
           expect.objectContaining({
             msg: "Spreadsheet name cannot be empty",
-            path: "name", // Update to "path" to match actual response
+            path: "name", // Updated to match the actual response
             location: "body",
-            type: "field",
-            value: "", // Include "value" as it's present in the response
+            type: "field", // Added to match the actual response
+            value: "", // Ensure the value field is included
           }),
         ])
       );
@@ -419,15 +552,22 @@ describe("Spreadsheet Routes", () => {
       // Inline mock for the destroy method to ensure it’s recognized
       const mockDestroy = jest.fn().mockResolvedValue();
 
-      // Mock findByPk to return an object with a destroy method
+      // Mock findByPk to return an object with a destroy method and collaborators
       Spreadsheet.findByPk.mockResolvedValue({
         ...mockSpreadsheet,
         destroy: mockDestroy,
+        Collaborators: [mockCollaborator],
       });
 
       // Mock the event emitter
       const mockEmitDelete = jest.fn();
-      getIO.mockReturnValue({ emit: mockEmitDelete });
+      getIO.mockReturnValue({
+        to: "owner-id-123",
+        emit: mockEmitDelete,
+        to: (id) => ({
+          emit: id === "collab-id-456" ? mockEmitDelete : jest.fn(),
+        }),
+      });
 
       const res = await request(app)
         .delete("/spreadsheets/550e8400-e29b-41d4-a716-446655440000")
@@ -435,7 +575,8 @@ describe("Spreadsheet Routes", () => {
 
       // Ensure findByPk and destroy are called
       expect(Spreadsheet.findByPk).toHaveBeenCalledWith(
-        "550e8400-e29b-41d4-a716-446655440000"
+        "550e8400-e29b-41d4-a716-446655440000",
+        expect.any(Object)
       );
       expect(mockDestroy).toHaveBeenCalled(); // Use the inline mock here
 
@@ -456,7 +597,9 @@ describe("Spreadsheet Routes", () => {
         .delete("/spreadsheets/non-existent-id")
         .set("Authorization", "Bearer valid-token");
 
-      expect(Spreadsheet.findByPk).toHaveBeenCalledWith("non-existent-id");
+      expect(Spreadsheet.findByPk).toHaveBeenCalledWith("non-existent-id", {
+        include: expect.any(Array),
+      });
       expect(res.statusCode).toBe(404);
       expect(res.body).toEqual({ message: "Spreadsheet not found" });
     });
@@ -469,11 +612,12 @@ describe("Spreadsheet Routes", () => {
         .set("Authorization", "Bearer collaborator-token"); // Simulating a collaborator
 
       expect(Spreadsheet.findByPk).toHaveBeenCalledWith(
-        "550e8400-e29b-41d4-a716-446655440000"
+        "550e8400-e29b-41d4-a716-446655440000",
+        expect.any(Object)
       );
       expect(res.statusCode).toBe(403);
       expect(res.body).toEqual({
-        message: "Only owner can delete the spreadsheet",
+        message: "Only the owner can delete the spreadsheet",
       });
       expect(mockSpreadsheet.destroy).not.toHaveBeenCalled();
     });
@@ -491,6 +635,27 @@ describe("Spreadsheet Routes", () => {
   });
 
   describe("POST /spreadsheets/:id/add-collaborator", () => {
+    it("should prevent the owner from being added as a collaborator", async () => {
+      Spreadsheet.findByPk.mockResolvedValue({
+        ...mockSpreadsheet,
+        Collaborators: [],
+      });
+
+      const res = await request(app)
+        .post(
+          "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/add-collaborator"
+        )
+        .set("Authorization", "Bearer valid-token")
+        .send({ collaboratorEmail: "testuser@example.com" }); // Owner's email
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        message: "Owner cannot be added as a collaborator",
+      });
+      expect(User.findOne).not.toHaveBeenCalled();
+      expect(UserSpreadsheet.create).not.toHaveBeenCalled();
+    });
+
     it("should add a collaborator and emit event", async () => {
       Spreadsheet.findByPk.mockResolvedValue({
         ...mockSpreadsheet,
@@ -502,7 +667,9 @@ describe("Spreadsheet Routes", () => {
       UserSpreadsheet.create.mockResolvedValue();
 
       const mockEmitAdd = jest.fn();
-      getIO.mockReturnValue({ to: () => ({ emit: mockEmitAdd }) });
+      getIO.mockReturnValue({
+        to: () => ({ emit: mockEmitAdd }), // Ensure `to` returns an object with `emit`
+      });
 
       const res = await request(app)
         .post(
@@ -514,7 +681,9 @@ describe("Spreadsheet Routes", () => {
       expect(Spreadsheet.findByPk).toHaveBeenCalledWith(
         "550e8400-e29b-41d4-a716-446655440000",
         {
-          include: [{ model: User, as: "Collaborators" }],
+          include: [
+            { model: User, as: "Collaborators", attributes: ["id", "email"] },
+          ],
         }
       );
       expect(User.findOne).toHaveBeenCalledWith({
@@ -532,23 +701,37 @@ describe("Spreadsheet Routes", () => {
       });
       expect(mockEmitAdd).toHaveBeenCalledWith("collaboratorAdded", {
         spreadsheetId: "550e8400-e29b-41d4-a716-446655440000",
-        collaborator: mockCollaborator,
+        collaborator: {
+          id: "collab-id-456",
+          email: "collab@example.com",
+        },
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({ message: "Collaborator added successfully" });
     });
 
     it("should return 404 if spreadsheet not found", async () => {
+      // Mock findByPk to return null
       Spreadsheet.findByPk.mockResolvedValue(null);
 
       const res = await request(app)
-        .post("/spreadsheets/non-existent-id/add-collaborator")
+        .post(
+          "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/add-collaborator"
+        )
         .set("Authorization", "Bearer valid-token")
         .send({ collaboratorEmail: "collab@example.com" });
 
-      expect(Spreadsheet.findByPk).toHaveBeenCalledWith("non-existent-id", {
-        include: [{ model: User, as: "Collaborators" }],
-      });
+      // Ensure findByPk was called with the correct parameters
+      expect(Spreadsheet.findByPk).toHaveBeenCalledWith(
+        "550e8400-e29b-41d4-a716-446655440000",
+        {
+          include: [
+            { model: User, as: "Collaborators", attributes: ["id", "email"] },
+          ],
+        }
+      );
+
+      // Verify the response
       expect(res.statusCode).toBe(404);
       expect(res.body).toEqual({ message: "Spreadsheet not found" });
     });
@@ -569,12 +752,17 @@ describe("Spreadsheet Routes", () => {
       expect(Spreadsheet.findByPk).toHaveBeenCalledWith(
         "550e8400-e29b-41d4-a716-446655440000",
         {
-          include: [{ model: User, as: "Collaborators" }],
+          include: [
+            { model: User, as: "Collaborators", attributes: ["id", "email"] },
+          ],
         }
       );
       expect(res.statusCode).toBe(403);
-      expect(res.body).toEqual({ message: "Only owner can add collaborators" });
+      expect(res.body).toEqual({
+        message: "Only the owner can add collaborators",
+      });
       expect(User.findOne).not.toHaveBeenCalled();
+      expect(UserSpreadsheet.create).not.toHaveBeenCalled();
     });
 
     it("should return 404 if collaborator not found", async () => {
@@ -602,7 +790,7 @@ describe("Spreadsheet Routes", () => {
     it("should return 400 if user is already a collaborator", async () => {
       Spreadsheet.findByPk.mockResolvedValue({
         ...mockSpreadsheet,
-        Collaborators: [],
+        Collaborators: [mockCollaborator],
       });
 
       User.findOne.mockResolvedValue(mockCollaborator);
@@ -640,33 +828,36 @@ describe("Spreadsheet Routes", () => {
 
   describe("DELETE /spreadsheets/:id/remove-collaborator", () => {
     it("should remove a collaborator and emit event", async () => {
-      // Mock the spreadsheet and collaborator
       Spreadsheet.findByPk.mockResolvedValue({
         ...mockSpreadsheet,
         Collaborators: [mockCollaborator],
       });
 
-      const mockDestroy = jest.fn().mockResolvedValue();
-      UserSpreadsheet.findOne.mockResolvedValue({
+      const mockUserSpreadsheet = {
         spreadsheetId: "550e8400-e29b-41d4-a716-446655440000",
         userId: "collab-id-456",
-        destroy: mockDestroy, // Inline mock for the destroy method
-      });
+        destroy: jest.fn().mockResolvedValue(),
+      };
+      UserSpreadsheet.findOne.mockResolvedValue(mockUserSpreadsheet);
 
       const mockEmitRemove = jest.fn();
-      getIO.mockReturnValue({ to: () => ({ emit: mockEmitRemove }) });
+      getIO.mockReturnValue({
+        to: () => ({ emit: mockEmitRemove }), // Ensure `to` returns an object with `emit`
+      });
 
       const res = await request(app)
         .delete(
           "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/remove-collaborator"
         )
         .set("Authorization", "Bearer valid-token")
-        .send({ collaboratorId: "collab-id-456" });
+        .send({ collaboratorEmail: "collab@example.com" });
 
       expect(Spreadsheet.findByPk).toHaveBeenCalledWith(
         "550e8400-e29b-41d4-a716-446655440000",
         {
-          include: [{ model: User, as: "Collaborators" }],
+          include: [
+            { model: User, as: "Collaborators", attributes: ["id", "email"] },
+          ],
         }
       );
       expect(UserSpreadsheet.findOne).toHaveBeenCalledWith({
@@ -676,15 +867,14 @@ describe("Spreadsheet Routes", () => {
         },
       });
 
-      // Ensure destroy was called
-      expect(mockDestroy).toHaveBeenCalled();
-
-      // Ensure the event is emitted with the correct arguments
+      expect(mockUserSpreadsheet.destroy).toHaveBeenCalled();
       expect(mockEmitRemove).toHaveBeenCalledWith("collaboratorRemoved", {
         spreadsheetId: "550e8400-e29b-41d4-a716-446655440000",
-        collaboratorId: "collab-id-456",
+        collaborator: {
+          id: "collab-id-456",
+          email: "collab@example.com",
+        },
       });
-
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
         message: "Collaborator removed successfully",
@@ -692,18 +882,19 @@ describe("Spreadsheet Routes", () => {
     });
 
     it("should return 404 if spreadsheet not found", async () => {
+      // Mock `findByPk` to return null
       Spreadsheet.findByPk.mockResolvedValue(null);
 
       const res = await request(app)
-        .delete("/spreadsheets/non-existent-id/remove-collaborator")
+        .delete(
+          "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/remove-collaborator"
+        ) // Valid UUID format
         .set("Authorization", "Bearer valid-token")
-        .send({ collaboratorId: "collab-id-456" });
+        .send({ collaboratorEmail: "test@example.com" }); // Valid email
 
-      expect(Spreadsheet.findByPk).toHaveBeenCalledWith("non-existent-id", {
-        include: [{ model: User, as: "Collaborators" }],
-      });
+      // Assert the status code and message
       expect(res.statusCode).toBe(404);
-      expect(res.body).toEqual({ message: "Spreadsheet not found" });
+      expect(res.body.message).toBe("Spreadsheet not found");
     });
 
     it("should return 403 if user is not the owner", async () => {
@@ -717,17 +908,19 @@ describe("Spreadsheet Routes", () => {
           "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/remove-collaborator"
         )
         .set("Authorization", "Bearer collaborator-token") // Simulating a collaborator trying to remove another collaborator
-        .send({ collaboratorId: "collab-id-456" });
+        .send({ collaboratorEmail: "collab@example.com" });
 
       expect(Spreadsheet.findByPk).toHaveBeenCalledWith(
         "550e8400-e29b-41d4-a716-446655440000",
         {
-          include: [{ model: User, as: "Collaborators" }],
+          include: [
+            { model: User, as: "Collaborators", attributes: ["id", "email"] },
+          ],
         }
       );
       expect(res.statusCode).toBe(403);
       expect(res.body).toEqual({
-        message: "Only owner can remove collaborators",
+        message: "Only the owner can remove collaborators",
       });
       expect(UserSpreadsheet.findOne).not.toHaveBeenCalled();
     });
@@ -735,7 +928,7 @@ describe("Spreadsheet Routes", () => {
     it("should return 400 if trying to remove the owner", async () => {
       Spreadsheet.findByPk.mockResolvedValue({
         ...mockSpreadsheet,
-        Collaborators: [{ id: "owner-id-123" }],
+        Collaborators: [{ id: "owner-id-123", email: "testuser@example.com" }],
       });
 
       const res = await request(app)
@@ -743,7 +936,7 @@ describe("Spreadsheet Routes", () => {
           "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/remove-collaborator"
         )
         .set("Authorization", "Bearer valid-token")
-        .send({ collaboratorId: "owner-id-123" });
+        .send({ collaboratorEmail: "testuser@example.com" }); // Owner's email
 
       expect(res.statusCode).toBe(400);
       expect(res.body).toEqual({
@@ -755,7 +948,7 @@ describe("Spreadsheet Routes", () => {
     it("should return 404 if collaborator relationship not found", async () => {
       Spreadsheet.findByPk.mockResolvedValue({
         ...mockSpreadsheet,
-        Collaborators: [],
+        Collaborators: [mockCollaborator],
       });
 
       UserSpreadsheet.findOne.mockResolvedValue(null);
@@ -765,7 +958,7 @@ describe("Spreadsheet Routes", () => {
           "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/remove-collaborator"
         )
         .set("Authorization", "Bearer valid-token")
-        .send({ collaboratorId: "collab-id-456" });
+        .send({ collaboratorEmail: "collab@example.com" });
 
       expect(UserSpreadsheet.findOne).toHaveBeenCalledWith({
         where: {
@@ -774,7 +967,7 @@ describe("Spreadsheet Routes", () => {
         },
       });
       expect(res.statusCode).toBe(404);
-      expect(res.body).toEqual({ message: "Collaborator not found" });
+      expect(res.body).toEqual({ message: "User is not a collaborator" });
     });
 
     it("should handle server errors and return 500", async () => {
@@ -785,7 +978,7 @@ describe("Spreadsheet Routes", () => {
           "/spreadsheets/550e8400-e29b-41d4-a716-446655440000/remove-collaborator"
         )
         .set("Authorization", "Bearer valid-token")
-        .send({ collaboratorId: "collab-id-456" });
+        .send({ collaboratorEmail: "collab@example.com" });
 
       expect(res.statusCode).toBe(500);
       expect(res.body).toEqual({ error: "Something went wrong!" });

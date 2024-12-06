@@ -12,7 +12,7 @@ const swaggerSpec = require("./docs/swagger");
 
 // Import Routes
 const authRoutes = require("./routes/authRoutes");
-const spreadsheetRoutes = require("./routes/spreadsheetRoutes");
+const spreadsheetRoutes = require("./routes/spreadSheetRoutes");
 const sheetRoutes = require("./routes/sheetRoutes");
 const cellRoutes = require("./routes/cellRoutes");
 const errorHandler = require("./middleware/errorHandler");

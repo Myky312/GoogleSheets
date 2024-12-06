@@ -115,7 +115,9 @@ exports.addCollaborator = async (req, res, next) => {
 
     // Fetch the spreadsheet along with its current collaborators
     const spreadsheet = await Spreadsheet.findByPk(spreadsheetId, {
-      include: [{ model: User, as: "Collaborators", attributes: ["id", "email"] }],
+      include: [
+        { model: User, as: "Collaborators", attributes: ["id", "email"] },
+      ],
     });
 
     if (!spreadsheet) {
@@ -163,12 +165,9 @@ exports.addCollaborator = async (req, res, next) => {
     const io = getIO();
 
     // Emit event to notify collaborators
-    io.to(spreadsheetId).emit("collaboratorAdded", {
+    io.to(`spreadsheet-${spreadsheetId}`).emit("collaboratorAdded", {
       spreadsheetId,
-      collaborator: {
-        id: collaborator.id,
-        email: collaborator.email,
-      },
+      collaborator: { id: collaborator.id, email: collaborator.email },
     });
 
     res.status(200).json({ message: "Collaborator added successfully" });
@@ -195,9 +194,10 @@ exports.removeCollaborator = async (req, res, next) => {
 
     // Fetch the spreadsheet along with its current collaborators
     const spreadsheet = await Spreadsheet.findByPk(spreadsheetId, {
-      include: [{ model: User, as: "Collaborators", attributes: ["id", "email"] }],
+      include: [
+        { model: User, as: "Collaborators", attributes: ["id", "email"] },
+      ],
     });
-
     if (!spreadsheet) {
       return res.status(404).json({ message: "Spreadsheet not found" });
     }
@@ -232,9 +232,7 @@ exports.removeCollaborator = async (req, res, next) => {
     });
 
     if (!existing) {
-      return res
-        .status(404)
-        .json({ message: "User is not a collaborator" });
+      return res.status(404).json({ message: "User is not a collaborator" });
     }
 
     // Remove the collaborator
@@ -243,12 +241,9 @@ exports.removeCollaborator = async (req, res, next) => {
     const io = getIO();
 
     // Emit event to notify collaborators
-    io.to(spreadsheetId).emit("collaboratorRemoved", {
+    io.to(`spreadsheet-${spreadsheetId}`).emit("collaboratorRemoved", {
       spreadsheetId,
-      collaborator: {
-        id: collaborator.id,
-        email: collaborator.email,
-      },
+      collaborator: { id: collaborator.id, email: collaborator.email },
     });
 
     res.status(200).json({ message: "Collaborator removed successfully" });
