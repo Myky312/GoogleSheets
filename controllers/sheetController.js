@@ -28,7 +28,7 @@ exports.createSheet = async (req, res, next) => {
 
     // Authorization: Check if the user is the owner or a collaborator
     if (spreadsheet.ownerId !== req.user.id) {
-      const isCollaborator = await Spreadsheet.hasCollaborator(req.user.id);
+      const isCollaborator = await spreadsheet.hasCollaborator(req.user.id);
       if (!isCollaborator) {
         return res
           .status(403)
@@ -66,7 +66,7 @@ exports.getSheets = async (req, res, next) => {
 
     // Authorization: Check if the user is the owner or a collaborator
     if (spreadsheet.ownerId !== req.user.id) {
-      const isCollaborator = await Spreadsheet.hasCollaborator(req.user.id);
+      const isCollaborator = await spreadsheet.hasCollaborator(req.user.id);
       if (!isCollaborator) {
         return res
           .status(403)
@@ -145,7 +145,7 @@ exports.updateSheet = async (req, res, next) => {
 
     // Authorization: Check if the user is the owner or a collaborator
     if (spreadsheet.ownerId !== req.user.id) {
-      const isCollaborator = await Spreadsheet.hasCollaborator(req.user.id);
+      const isCollaborator = await spreadsheet.hasCollaborator(req.user.id);
       if (!isCollaborator) {
         return res
           .status(403)
