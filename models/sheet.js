@@ -1,11 +1,22 @@
 // models/sheet.js
-const { Model, DataTypes } = require('sequelize');
+const { Model, DataTypes } = require("sequelize");
 
 module.exports = (sequelize) => {
   class Sheet extends Model {
     static associate(models) {
-      Sheet.belongsTo(models.Spreadsheet, { foreignKey: 'spreadsheetId' });
-      Sheet.hasMany(models.Cell, { foreignKey: 'sheetId' });
+      // Belongs to Spreadsheet
+      Sheet.belongsTo(models.Spreadsheet, {
+        foreignKey: "spreadsheetId",
+        as: "Spreadsheet",
+        onDelete: "CASCADE",
+      });
+
+      // One-to-Many: Sheet -> Cells
+      Sheet.hasMany(models.Cell, {
+        foreignKey: "sheetId",
+        as: "Cells",
+        onDelete: "CASCADE",
+      });
     }
   }
 
@@ -19,16 +30,22 @@ module.exports = (sequelize) => {
       spreadsheetId: {
         type: DataTypes.UUID,
         allowNull: false,
+        references: {
+          model: "Spreadsheets",
+          key: "id",
+        },
+        onDelete: "CASCADE",
       },
       name: {
         type: DataTypes.STRING,
-        defaultValue: 'Sheet1',
+        defaultValue: "Sheet1",
+        allowNull: false,
       },
     },
     {
       sequelize,
-      modelName: 'Sheet',
-      tableName: 'Sheets',
+      modelName: "Sheet",
+      tableName: "Sheets",
       timestamps: true,
     }
   );

@@ -11,20 +11,28 @@ module.exports = (sequelize) => {
         onDelete: "CASCADE",
       });
 
-      // Many-to-Many: Spreadsheets <-> Users
+      // Many-to-Many: Spreadsheet <-> Users (Collaborators)
       Spreadsheet.belongsToMany(models.User, {
         through: models.UserSpreadsheet,
         foreignKey: "spreadsheetId",
+        otherKey: "userId",
         as: "Collaborators",
+        onDelete: "CASCADE",
       });
 
-      // Belongs to Owner
+      // Belongs to Owner (User)
       Spreadsheet.belongsTo(models.User, {
         foreignKey: "ownerId",
         as: "Owner",
+        onDelete: "CASCADE",
       });
     }
 
+    /**
+     * Checks if a user is a collaborator on the spreadsheet
+     * @param {string} userId - UUID of the user
+     * @returns {Promise<boolean>}
+     */
     async hasCollaborator(userId) {
       const collaborators = await this.getCollaborators({
         where: { id: userId },
@@ -43,6 +51,10 @@ module.exports = (sequelize) => {
       ownerId: {
         type: DataTypes.UUID,
         allowNull: false,
+        references: {
+          model: "Users",
+          key: "id",
+        },
       },
       name: {
         type: DataTypes.STRING,

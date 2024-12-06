@@ -4,7 +4,19 @@ const { Model, DataTypes } = require("sequelize");
 module.exports = (sequelize) => {
   class UserSpreadsheet extends Model {
     static associate(models) {
-      // Define any associations if necessary
+      // Belongs to User
+      UserSpreadsheet.belongsTo(models.User, {
+        foreignKey: "userId",
+        as: "User",
+        onDelete: "CASCADE",
+      });
+
+      // Belongs to Spreadsheet
+      UserSpreadsheet.belongsTo(models.Spreadsheet, {
+        foreignKey: "spreadsheetId",
+        as: "Spreadsheet",
+        onDelete: "CASCADE",
+      });
     }
   }
 
@@ -18,6 +30,7 @@ module.exports = (sequelize) => {
           model: "Users", // Ensure this matches your table name
           key: "id",
         },
+        onDelete: "CASCADE",
       },
       spreadsheetId: {
         type: DataTypes.UUID,
@@ -27,8 +40,9 @@ module.exports = (sequelize) => {
           model: "Spreadsheets", // Ensure this matches your table name
           key: "id",
         },
-      },      
-      // Add any additional fields here
+        onDelete: "CASCADE",
+      },
+      // Add any additional fields here if needed
     },
     {
       sequelize,

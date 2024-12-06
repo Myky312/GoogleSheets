@@ -1,10 +1,15 @@
 // models/cell.js
-const { Model, DataTypes } = require('sequelize');
+const { Model, DataTypes } = require("sequelize");
 
 module.exports = (sequelize) => {
   class Cell extends Model {
     static associate(models) {
-      Cell.belongsTo(models.Sheet, { foreignKey: 'sheetId' });
+      // Belongs to Sheet
+      Cell.belongsTo(models.Sheet, {
+        foreignKey: "sheetId",
+        as: "Sheet",
+        onDelete: "CASCADE",
+      });
     }
   }
 
@@ -18,6 +23,11 @@ module.exports = (sequelize) => {
       sheetId: {
         type: DataTypes.UUID,
         allowNull: false,
+        references: {
+          model: "Sheets",
+          key: "id",
+        },
+        onDelete: "CASCADE",
       },
       row: {
         type: DataTypes.INTEGER,
@@ -29,18 +39,21 @@ module.exports = (sequelize) => {
       },
       content: {
         type: DataTypes.TEXT,
+        allowNull: true,
       },
       formula: {
         type: DataTypes.TEXT,
+        allowNull: true,
       },
       hyperlink: {
         type: DataTypes.TEXT,
-      }
+        allowNull: true,
+      },
     },
     {
       sequelize,
-      modelName: 'Cell',
-      tableName: 'Cells',
+      modelName: "Cell",
+      tableName: "Cells",
       timestamps: true,
     }
   );

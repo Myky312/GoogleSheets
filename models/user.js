@@ -4,15 +4,20 @@ const { Model, DataTypes } = require("sequelize");
 module.exports = (sequelize) => {
   class User extends Model {
     static associate(models) {
-      // Many-to-Many: Users <-> Spreadsheets
-      User.belongsToMany(models.Spreadsheet, {
-        through: models.UserSpreadsheet,
-        foreignKey: "userId",
-        as: "CollaboratingSpreadsheets",
-      });
+      // One-to-Many: User (Owner) -> Spreadsheets
       User.hasMany(models.Spreadsheet, {
         foreignKey: "ownerId",
         as: "OwnedSpreadsheets",
+        onDelete: "CASCADE",
+      });
+
+      // Many-to-Many: User <-> Spreadsheets (Collaborations)
+      User.belongsToMany(models.Spreadsheet, {
+        through: models.UserSpreadsheet,
+        foreignKey: "userId",
+        otherKey: "spreadsheetId",
+        as: "Collaborations",
+        onDelete: "CASCADE",
       });
     }
   }
@@ -33,6 +38,9 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         unique: true,
         allowNull: false,
+        validate: {
+          isEmail: true,
+        },
       },
       passwordHash: {
         type: DataTypes.STRING,

@@ -96,6 +96,7 @@ router.get("/", spreadsheetController.getSpreadsheets);
  *         description: Spreadsheet ID
  *         schema:
  *           type: string
+ *           format: uuid
  *           example: "550e8400-e29b-41d4-a716-446655440000"
  *     responses:
  *       '200':
@@ -106,11 +107,38 @@ router.get("/", spreadsheetController.getSpreadsheets);
  *               type: object
  *               properties:
  *                 spreadsheet:
- *                   $ref: '#/components/schemas/Spreadsheet'
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       format: uuid
+ *                     name:
+ *                       type: string
+ *                     ownerId:
+ *                       type: string
+ *                       format: uuid
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
+ *                     Sheets:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Sheet'
+ *                     Collaborators:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/User'
+ *                     owner:
+ *                       $ref: '#/components/schemas/User' # If included
  *       '403':
  *         description: Access denied
  *       '404':
  *         description: Spreadsheet not found
+ *       '400':
+ *         description: Bad request, invalid input
  */
 router.get(
   "/:id",
@@ -228,6 +256,7 @@ router.delete(
  *             properties:
  *               collaboratorEmail:
  *                 type: string
+ *                 format: email
  *                 example: "collaborator@example.com"
  *     responses:
  *       '200':
@@ -242,7 +271,9 @@ router.delete(
 router.post(
   "/:id/add-collaborator",
   [
-    param("id").isUUID().withMessage("Invalid spreadsheet ID format"),
+    param("id")
+      .isUUID()
+      .withMessage("Invalid spreadsheet ID format"),
     body("collaboratorEmail")
       .isEmail()
       .withMessage("Valid collaborator email is required"),
@@ -254,7 +285,7 @@ router.post(
  * @swagger
  * /spreadsheets/{id}/remove-collaborator:
  *   delete:
- *     summary: Remove a collaborator from a spreadsheet
+ *     summary: Remove a collaborator from a spreadsheet by email
  *     tags: [Spreadsheets]
  *     security:
  *       - bearerAuth: []
@@ -273,11 +304,12 @@ router.post(
  *           schema:
  *             type: object
  *             required:
- *               - collaboratorId
+ *               - collaboratorEmail
  *             properties:
- *               collaboratorId:
+ *               collaboratorEmail:
  *                 type: string
- *                 example: "660e8400-e29b-41d4-a716-446655440111"
+ *                 format: email
+ *                 example: "collaborator@example.com"
  *     responses:
  *       '200':
  *         description: Collaborator removed successfully
@@ -291,10 +323,12 @@ router.post(
 router.delete(
   "/:id/remove-collaborator",
   [
-    param("id").isUUID().withMessage("Invalid spreadsheet ID format"),
-    body("collaboratorId")
+    param("id")
       .isUUID()
-      .withMessage("Valid collaborator ID is required"),
+      .withMessage("Invalid spreadsheet ID format"),
+    body("collaboratorEmail")
+      .isEmail()
+      .withMessage("Valid collaborator email is required"),
   ],
   spreadsheetController.removeCollaborator
 );
