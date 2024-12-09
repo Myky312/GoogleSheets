@@ -5,6 +5,71 @@ const { validationResult } = require("express-validator");
 const { getIO } = require("../socket");
 
 /**
+ * Bulk create or update cells within a sheet.
+ * Both owners and collaborators can perform this action.
+ */
+exports.bulkCreateOrUpdateCells = async (req, res, next) => {
+  try {
+    // Validate input
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { spreadsheetId, sheetId } = req.params;
+    const { cells } = req.body;
+
+    // Check if spreadsheet exists
+    const spreadsheet = await Spreadsheet.findByPk(spreadsheetId);
+    if (!spreadsheet) {
+      return res.status(404).json({ message: "Spreadsheet not found" });
+    }
+
+    // Check if user is authorized
+    if (spreadsheet.ownerId !== req.user.id) {
+      const isCollaborator = await spreadsheet.hasCollaborator(req.user.id);
+      if (!isCollaborator) {
+        return res.status(403).json({ message: "Access denied to modify cells" });
+      }
+    }
+
+    // Check if sheet exists
+    const sheet = await Sheet.findOne({ where: { id: sheetId, spreadsheetId } });
+    if (!sheet) {
+      return res.status(404).json({ message: "Sheet not found" });
+    }
+
+    // Prepare cells for bulkCreate with upsert
+    const cellsToUpsert = cells.map(cell => ({
+      sheetId,
+      row: cell.row,
+      column: cell.column,
+      content: cell.content,
+      formula: cell.formula,
+      hyperlink: cell.hyperlink,
+      updatedAt: new Date(),
+      createdAt: new Date(),
+    }));
+
+    // Perform bulk upsert
+    const upsertedCells = await Cell.bulkCreate(cellsToUpsert, {
+      updateOnDuplicate: ["content", "formula", "hyperlink", "updatedAt"],
+      returning: true,
+    });
+
+    // Emit real-time updates for each cell
+    const io = getIO();
+    upsertedCells.forEach(cell => {
+      io.to(spreadsheetId).emit("cellUpdated", { cell });
+    });
+
+    return res.status(200).json({ message: "Cells updated successfully", cells: upsertedCells });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Create a new cell within a sheet.
  * Both owners and collaborators can create/update cells.
  */

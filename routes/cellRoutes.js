@@ -5,6 +5,7 @@ const router = express.Router({ mergeParams: true });
 const { body, param } = require("express-validator");
 const cellController = require("../controllers/cellController");
 const validateRequest = require("../middleware/validateRequest");
+const { bulkUpdateCellsValidator } = require("../validators/cellValidators");
 
 /**
  * @swagger
@@ -228,6 +229,91 @@ router.get(
     validateRequest,
   ],
   cellController.getCell
+);
+
+/**
+ * @swagger
+ * /spreadsheets/{spreadsheetId}/sheets/{sheetId}/cells:
+ *   put:
+ *     summary: Bulk create or update cells within a sheet
+ *     tags: [Cells]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: spreadsheetId
+ *         required: true
+ *         description: Spreadsheet ID
+ *         schema:
+ *           type: string
+ *           example: "550e8400-e29b-41d4-a716-446655440000"
+ *       - in: path
+ *         name: sheetId
+ *         required: true
+ *         description: Sheet ID
+ *         schema:
+ *           type: string
+ *           example: "660e8400-e29b-41d4-a716-446655440000"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - cells
+ *             properties:
+ *               cells:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - row
+ *                     - column
+ *                   properties:
+ *                     row:
+ *                       type: integer
+ *                       example: 1
+ *                     column:
+ *                       type: integer
+ *                       example: 1
+ *                     content:
+ *                       type: string
+ *                       example: "Hello World"
+ *                     formula:
+ *                       type: string
+ *                       example: "=SUM(A1:A10)"
+ *                     hyperlink:
+ *                       type: string
+ *                       format: uri
+ *                       example: "https://example.com"
+ *     responses:
+ *       '200':
+ *         description: Cells updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Cells updated successfully"
+ *                 cells:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Cell'
+ *       '400':
+ *         description: Bad request, invalid input
+ *       '403':
+ *         description: Access denied
+ *       '404':
+ *         description: Spreadsheet or sheet not found
+ */
+router.put(
+  "/",
+  bulkUpdateCellsValidator, 
+  validateRequest, 
+  cellController.bulkCreateOrUpdateCells
 );
 
 /**
