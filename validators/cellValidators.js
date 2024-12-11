@@ -37,8 +37,8 @@ exports.bulkUpdateCellsValidator = [
     .isString()
     .withMessage("Formula must be a string"),
 
-  body("cells.*.hyperlink")
-    .optional()
-    .isURL()
-    .withMessage("Hyperlink must be a valid URL"),
+  // body("cells.*.hyperlink")
+  //   .optional()
+  //   .isURL()
+  //   .withMessage("Hyperlink must be a valid URL"),
 ];
