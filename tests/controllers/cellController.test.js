@@ -22,6 +22,12 @@ jest.mock("../../models", () => ({
 
 jest.mock("express-validator");
 jest.mock("../../socket");
+jest.mock("../../services/formulaService", () => ({
+  evaluateFormula: jest.fn(),
+}));
+
+const { evaluateFormula } = require("../../services/formulaService");
+
 
 describe("cellController", () => {
   let req, res, next;
@@ -59,7 +65,7 @@ describe("cellController", () => {
         row: 1,
         column: 1,
         content: "10",
-        formula: "=SUM(A1:A10)",
+        formula: "",
         hyperlink: null,
       };
 
@@ -92,7 +98,7 @@ describe("cellController", () => {
         row: 1,
         column: 1,
         content: "10",
-        formula: "=SUM(A1:A10)",
+        formula: "",
         hyperlink: null,
       });
       expect(res.status).toHaveBeenCalledWith(200);
@@ -103,7 +109,7 @@ describe("cellController", () => {
           row: 1,
           column: 1,
           content: "10",
-          formula: "=SUM(A1:A10)",
+          formula: "",
           hyperlink: null,
         },
       });
@@ -223,6 +229,130 @@ describe("cellController", () => {
       await cellController.createOrUpdateCell(req, res, next);
 
       expect(next).toHaveBeenCalledWith(error);
+    });
+  });
+
+  describe("createOrUpdateCell - Formula Tests", () => {
+    beforeEach(() => {
+      // Clear mock calls and set default resolved value
+      evaluateFormula.mockClear();
+      evaluateFormula.mockResolvedValue(123); // default return for successful formula evaluation
+    });
+  
+    it("should evaluate formula and update content if formula starts with '=' (create mode)", async () => {
+      req.params = {
+        spreadsheetId: "spreadsheetId1",
+        sheetId: "sheetId1",
+      };
+      req.body = {
+        row: 5,
+        column: 3,
+        content: "",          // initial content
+        formula: "=SUM(A1:B2)", // formula to evaluate
+        hyperlink: null,
+      };
+  
+      // Mock spreadsheet / sheet
+      Spreadsheet.findByPk.mockResolvedValue({
+        id: "spreadsheetId1",
+        ownerId: "userId1",
+        hasCollaborator: jest.fn().mockResolvedValue(false),
+      });
+      Sheet.findOne.mockResolvedValue({
+        id: "sheetId1",
+        spreadsheetId: "spreadsheetId1",
+      });
+  
+      // Cell does not exist, so we will CREATE
+      Cell.findOne.mockResolvedValue(null);
+      // Simulate DB creation
+      Cell.create.mockResolvedValue({
+        id: "newCellId",
+        sheetId: "sheetId1",
+        row: 5,
+        column: 3,
+        content: "", // will be overwritten after formula evaluation
+        formula: "=SUM(A1:B2)",
+        hyperlink: null,
+        save: jest.fn(),
+      });
+  
+      // Mock getIO / Socket
+      const ioMock = { to: jest.fn().mockReturnThis(), emit: jest.fn() };
+      getIO.mockReturnValue(ioMock);
+  
+      // Evaluate formula will return 123
+      evaluateFormula.mockResolvedValue(123);
+  
+      await cellController.createOrUpdateCell(req, res, next);
+  
+      // After create, we expect evaluateFormula to have been called
+      expect(evaluateFormula).toHaveBeenCalledWith("SUM(A1:B2)", "sheetId1");
+      // Check the final response
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        cell: expect.objectContaining({
+          id: "newCellId",
+          row: 5,
+          column: 3,
+          content: "123", // updated with formula result
+          formula: "=SUM(A1:B2)",
+        }),
+      });
+  
+      // Socket emit verification
+      expect(ioMock.to).toHaveBeenCalledWith("spreadsheetId1");
+      expect(ioMock.emit).toHaveBeenCalledWith("cellUpdated", {
+        cell: expect.any(Object),
+      });
+    });
+  
+    it("should return 400 if formula evaluation fails", async () => {
+      req.params = {
+        spreadsheetId: "spreadsheetId1",
+        sheetId: "sheetId1",
+      };
+      req.body = {
+        row: 10,
+        column: 5,
+        content: "",
+        formula: "=BADFORMULA(!!!)", // malformed formula
+        hyperlink: null,
+      };
+  
+      Spreadsheet.findByPk.mockResolvedValue({
+        id: "spreadsheetId1",
+        ownerId: "userId1",
+        hasCollaborator: jest.fn().mockResolvedValue(false),
+      });
+      Sheet.findOne.mockResolvedValue({
+        id: "sheetId1",
+        spreadsheetId: "spreadsheetId1",
+      });
+  
+      // Cell does not exist
+      Cell.findOne.mockResolvedValue(null);
+      Cell.create.mockResolvedValue({
+        id: "newCellId",
+        sheetId: "sheetId1",
+        row: 10,
+        column: 5,
+        content: "",
+        formula: "=BADFORMULA(!!!)",
+        hyperlink: null,
+        save: jest.fn(),
+      });
+  
+      // Force evaluateFormula to throw an error
+      evaluateFormula.mockRejectedValue(new Error("Invalid formula syntax"));
+  
+      await cellController.createOrUpdateCell(req, res, next);
+  
+      expect(evaluateFormula).toHaveBeenCalledWith("BADFORMULA(!!!)", "sheetId1");
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Formula evaluation error: Invalid formula syntax",
+      });
     });
   });
 
@@ -784,6 +914,141 @@ describe("cellController", () => {
         
   });
 
+  describe("bulkCreateOrUpdateCells - Formula Tests", () => {
+    beforeEach(() => {
+      evaluateFormula.mockClear();
+      evaluateFormula.mockResolvedValue(999); // default success result
+    });
+  
+    it("should evaluate formulas for multiple cells before bulk upsert", async () => {
+      req.params = {
+        spreadsheetId: "spreadsheetId1",
+        sheetId: "sheetId1",
+      };
+      req.body = {
+        cells: [
+          { row: 1, column: 1, content: "", formula: "=1+2", hyperlink: null },
+          { row: 2, column: 2, content: "", formula: "=A1*10", hyperlink: null },
+          { row: 3, column: 3, content: "Plain text", formula: null, hyperlink: null },
+        ],
+      };
+  
+      Spreadsheet.findByPk.mockResolvedValue({
+        id: "spreadsheetId1",
+        ownerId: "userId1",
+        hasCollaborator: jest.fn().mockResolvedValue(false),
+      });
+      Sheet.findOne.mockResolvedValue({
+        id: "sheetId1",
+        spreadsheetId: "spreadsheetId1",
+      });
+  
+      Cell.bulkCreate.mockResolvedValue([
+        // Suppose the DB returns updated/created cell objects
+        { id: "cellId1", row: 1, column: 1, content: "999", formula: "=1+2" },
+        { id: "cellId2", row: 2, column: 2, content: "999", formula: "=A1*10" },
+        { id: "cellId3", row: 3, column: 3, content: "Plain text", formula: null },
+      ]);
+  
+      const ioMock = { to: jest.fn().mockReturnThis(), emit: jest.fn() };
+      getIO.mockReturnValue(ioMock);
+  
+      await cellController.bulkCreateOrUpdateCells(req, res, next);
+  
+      // We expect evaluateFormula to have been called for the first two cells
+      expect(evaluateFormula).toHaveBeenCalledTimes(2);
+      expect(evaluateFormula).toHaveBeenCalledWith("1+2", "sheetId1");
+      expect(evaluateFormula).toHaveBeenCalledWith("A1*10", "sheetId1");
+  
+      // The third cell has no formula => no evaluateFormula call
+      expect(Cell.bulkCreate).toHaveBeenCalledWith(
+        [
+          {
+            row: 1,
+            column: 1,
+            content: "999", // content replaced by evaluated result
+            formula: "=1+2",
+            hyperlink: null,
+            sheetId: "sheetId1",
+            createdAt: expect.any(Date),
+            updatedAt: expect.any(Date),
+          },
+          {
+            row: 2,
+            column: 2,
+            content: "999", // replaced result
+            formula: "=A1*10",
+            hyperlink: null,
+            sheetId: "sheetId1",
+            createdAt: expect.any(Date),
+            updatedAt: expect.any(Date),
+          },
+          {
+            row: 3,
+            column: 3,
+            content: "Plain text",
+            formula: null,
+            hyperlink: null,
+            sheetId: "sheetId1",
+            createdAt: expect.any(Date),
+            updatedAt: expect.any(Date),
+          },
+        ],
+        expect.objectContaining({
+          updateOnDuplicate: ["content", "formula", "hyperlink", "updatedAt"],
+          returning: true,
+        })
+      );
+  
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Cells updated successfully",
+        cells: expect.any(Array),
+      });
+  
+      // Socket emits
+      expect(ioMock.to).toHaveBeenCalledWith("spreadsheetId1");
+      expect(ioMock.emit).toHaveBeenCalledTimes(3); // For each cell upsert
+    });
+  
+    it("should return 400 if any formula evaluation fails in bulk", async () => {
+      req.params = {
+        spreadsheetId: "spreadsheetId1",
+        sheetId: "sheetId1",
+      };
+      req.body = {
+        cells: [
+          { row: 1, column: 1, content: "", formula: "=BOGUS", hyperlink: null },
+          { row: 2, column: 2, content: "", formula: "=A1*10", hyperlink: null },
+        ],
+      };
+  
+      Spreadsheet.findByPk.mockResolvedValue({
+        id: "spreadsheetId1",
+        ownerId: "userId1",
+        hasCollaborator: jest.fn().mockResolvedValue(false),
+      });
+      Sheet.findOne.mockResolvedValue({
+        id: "sheetId1",
+        spreadsheetId: "spreadsheetId1",
+      });
+  
+      // Let the first formula fail
+      evaluateFormula.mockImplementationOnce(() => {
+        throw new Error("Invalid formula: BOGUS");
+      });
+  
+      await cellController.bulkCreateOrUpdateCells(req, res, next);
+  
+      expect(evaluateFormula).toHaveBeenCalledTimes(1); // It fails on the first cell
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        message: expect.stringContaining("Formula evaluation error"),
+      });
+      expect(Cell.bulkCreate).not.toHaveBeenCalled(); // Bulk create is aborted
+    });
+  });
+  
   describe("getCells", () => {
     it("should retrieve all cells successfully", async () => {
       req.params = {

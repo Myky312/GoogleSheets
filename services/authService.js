@@ -49,7 +49,7 @@ exports.login = async (username, password) => {
 
   // Generate access token and refresh token
   const accessToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
-    expiresIn: "1h",
+    expiresIn: "5h",
   });
   const refreshToken = jwt.sign(
     { userId: user.id },

@@ -3,6 +3,7 @@
 const { Cell, Sheet, Spreadsheet } = require("../models");
 const { validationResult } = require("express-validator");
 const { getIO } = require("../socket");
+const { evaluateFormula } = require("../services/formulaService");
 
 /**
  * Bulk create or update cells within a sheet.
@@ -29,18 +30,43 @@ exports.bulkCreateOrUpdateCells = async (req, res, next) => {
     if (spreadsheet.ownerId !== req.user.id) {
       const isCollaborator = await spreadsheet.hasCollaborator(req.user.id);
       if (!isCollaborator) {
-        return res.status(403).json({ message: "Access denied to modify cells" });
+        return res
+          .status(403)
+          .json({ message: "Access denied to modify cells" });
       }
     }
 
     // Check if sheet exists
-    const sheet = await Sheet.findOne({ where: { id: sheetId, spreadsheetId } });
+    const sheet = await Sheet.findOne({
+      where: { id: sheetId, spreadsheetId },
+    });
     if (!sheet) {
       return res.status(404).json({ message: "Sheet not found" });
     }
 
+    /**
+     * STEP 1: Evaluate any formulas in the "cells" payload before bulk upserting.
+     * If a cell has a formula that starts with '=' sign, evaluate it via formulaService
+     * and store the result in 'content' so that the database always has the computed value.
+     */
+    for (const cell of cells) {
+      if (cell.formula && cell.formula.startsWith("=")) {
+        try {
+          const expression = cell.formula.slice(1); // remove '='
+          const evaluatedValue = await evaluateFormula(expression, sheetId);
+          cell.content = evaluatedValue.toString(); // store numeric result as string
+        } catch (err) {
+          return res
+            .status(400)
+            .json({
+              message: `Formula evaluation error in cell (row ${cell.row}, col ${cell.column}): ${err.message}`,
+            });
+        }
+      }
+    }
+
     // Prepare cells for bulkCreate with upsert
-    const cellsToUpsert = cells.map(cell => ({
+    const cellsToUpsert = cells.map((cell) => ({
       sheetId,
       row: cell.row,
       column: cell.column,
@@ -57,20 +83,22 @@ exports.bulkCreateOrUpdateCells = async (req, res, next) => {
       returning: true,
     });
 
-    // Emit real-time updates for each cell
+    // Emit real-time updates for each upserted cell
     const io = getIO();
-    upsertedCells.forEach(cell => {
+    upsertedCells.forEach((cell) => {
       io.to(spreadsheetId).emit("cellUpdated", { cell });
     });
 
-    return res.status(200).json({ message: "Cells updated successfully", cells: upsertedCells });
+    return res
+      .status(200)
+      .json({ message: "Cells updated successfully", cells: upsertedCells });
   } catch (error) {
     next(error);
   }
 };
 
 /**
- * Create a new cell within a sheet.
+ * Create or update a single cell within a sheet.
  * Both owners and collaborators can create/update cells.
  */
 exports.createOrUpdateCell = async (req, res, next) => {
@@ -106,7 +134,6 @@ exports.createOrUpdateCell = async (req, res, next) => {
     const sheet = await Sheet.findOne({
       where: { id: sheetId, spreadsheetId },
     });
-
     if (!sheet) {
       return res.status(404).json({ message: "Sheet not found" });
     }
@@ -132,6 +159,23 @@ exports.createOrUpdateCell = async (req, res, next) => {
         formula,
         hyperlink,
       });
+    }
+
+    /**
+     * STEP 2: If a formula is present, evaluate it now and update 'content' to reflect
+     * the computed result. We check if formula starts with '=' to distinguish it from plain text.
+     */
+    if (cell.formula && cell.formula.startsWith("=")) {
+      try {
+        const expression = cell.formula.slice(1); // remove '='
+        const evaluatedValue = await evaluateFormula(expression, sheetId);
+        cell.content = evaluatedValue.toString();
+        await cell.save();
+      } catch (err) {
+        return res
+          .status(400)
+          .json({ message: `Formula evaluation error: ${err.message}` });
+      }
     }
 
     // Emit event to the spreadsheet room
