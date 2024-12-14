@@ -21,6 +21,8 @@ const { bulkUpdateCellsValidator } = require("../validators/cellValidators");
  *     summary: Create or update a cell
  *     description: Create a new cell or update an existing cell in a sheet.
  *     tags: [Cells]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: spreadsheetId
@@ -110,6 +112,8 @@ router.post(
  *     summary: Get all cells in a sheet
  *     description: Retrieve all cells within a specific sheet.
  *     tags: [Cells]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: spreadsheetId
@@ -165,6 +169,8 @@ router.get(
  *     summary: Get a specific cell
  *     description: Retrieve a specific cell by row and column numbers.
  *     tags: [Cells]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: spreadsheetId
@@ -351,10 +357,16 @@ router.get(
 router.put(
   "/:row/:column",
   [
-    param("spreadsheetId").isUUID().withMessage("Invalid spreadsheet ID format"),
+    param("spreadsheetId")
+      .isUUID()
+      .withMessage("Invalid spreadsheet ID format"),
     param("sheetId").isUUID().withMessage("Invalid sheet ID format"),
-    param("row").isInt({ min: 1 }).withMessage("Row must be a positive integer"),
-    param("column").isInt({ min: 1 }).withMessage("Column must be a positive integer"),
+    param("row")
+      .isInt({ min: 1 })
+      .withMessage("Row must be a positive integer"),
+    param("column")
+      .isInt({ min: 1 })
+      .withMessage("Column must be a positive integer"),
     body("content")
       .optional()
       .custom((value) => {
@@ -464,8 +476,8 @@ router.put(
  */
 router.put(
   "/",
-  bulkUpdateCellsValidator, 
-  validateRequest, 
+  bulkUpdateCellsValidator,
+  validateRequest,
   cellController.bulkCreateOrUpdateCells
 );
 
@@ -475,6 +487,8 @@ router.put(
  *   delete:
  *     summary: Delete a cell
  *     description: Delete a specific cell by row and column numbers.
+ *     security:
+ *       - bearerAuth: []
  *     tags: [Cells]
  *     parameters:
  *       - in: path

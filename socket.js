@@ -3,28 +3,27 @@
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const logger = require("./utils/logger");
-const { Spreadsheet, Sheet, User, UserSpreadsheet, Cell } = require("./models");
-const formulaService = require("./services/formulaService"); // Assuming you have a formula service for cell calculations
+const { Spreadsheet, Sheet, User, Cell } = require("./models");
+const formulaService = require("./services/formulaService"); 
 
 let io;
 
 /**
- * Initialize Socket.io with the HTTP server.
- * @param {http.Server} server - The HTTP server instance.
- * @returns {Server} - The initialized Socket.io server.
+ * Инициализирует Socket.io поверх вашего HTTP-сервера.
+ * @param {http.Server} server - Экземпляр HTTP-сервера (Express).
+ * @returns {Server} - Экземпляр Socket.io.
  */
 const initializeSocket = (server) => {
   io = new Server(server, {
+    // Если нужно настроить CORS:
     // cors: {
-    //   origin: "http://your-frontend-domain.com", // Replace with your frontend's domain
+    //   origin: "http://your-frontend-domain.com", // Замените на адрес фронтенда
     //   methods: ["GET", "POST"],
     //   credentials: true,
     // },
-    // Optional: Increase max listeners if necessary
-    // maxHttpBufferSize: 1e8,
   });
 
-  // Middleware for authenticating socket connections
+  // Мидлвара аутентификации по JWT при установке сокет-соединения
   io.use((socket, next) => {
     const token = socket.handshake.auth.token;
     if (!token) {
@@ -37,23 +36,22 @@ const initializeSocket = (server) => {
         logger.warn(`Socket authentication failed: ${err.message}`);
         return next(new Error("Authentication error: Invalid token"));
       }
-      socket.userId = decoded.userId;
+      socket.userId = decoded.userId; // Сохраняем userId в сокете
       next();
     });
   });
 
-  // Handle socket connections
+  // Основной обработчик событий при подключении сокета
   io.on("connection", (socket) => {
     logger.info(`User connected: ${socket.userId}`);
 
     /**
-     * Join a spreadsheet room.
-     * This allows the user to receive real-time updates related to this spreadsheet.
-     * @param {string} spreadsheetId - The ID of the spreadsheet to join.
+     * Пользователь присоединяется к комнате spreadsheet.
+     * @param {string} spreadsheetId - ID таблицы (UUID).
      */
     socket.on("joinSpreadsheet", async (spreadsheetId) => {
       try {
-        // Verify that the user has access to the spreadsheet
+        // Проверяем доступ пользователя к spreadsheet
         const spreadsheet = await Spreadsheet.findByPk(spreadsheetId, {
           include: [{ model: User, as: "Collaborators", attributes: ["id"] }],
         });
@@ -75,13 +73,11 @@ const initializeSocket = (server) => {
           return;
         }
 
-        // Join the room
+        // Присоединяемся к комнате spreadsheetId
         socket.join(spreadsheetId);
-        logger.info(
-          `User ${socket.userId} joined spreadsheet ${spreadsheetId}`
-        );
+        logger.info(`User ${socket.userId} joined spreadsheet ${spreadsheetId}`);
 
-        // Optionally, emit a user presence event
+        // Уведомляем всех в комнате, что пользователь присоединился
         io.to(spreadsheetId).emit("userJoined", {
           spreadsheetId,
           userId: socket.userId,
@@ -93,14 +89,13 @@ const initializeSocket = (server) => {
     });
 
     /**
-     * Leave a spreadsheet room.
-     * @param {string} spreadsheetId - The ID of the spreadsheet to leave.
+     * Пользователь покидает комнату spreadsheet.
+     * @param {string} spreadsheetId - ID таблицы (UUID).
      */
     socket.on("leaveSpreadsheet", (spreadsheetId) => {
       socket.leave(spreadsheetId);
       logger.info(`User ${socket.userId} left spreadsheet ${spreadsheetId}`);
 
-      // Optionally, emit a user leave event
       io.to(spreadsheetId).emit("userLeft", {
         spreadsheetId,
         userId: socket.userId,
@@ -108,17 +103,14 @@ const initializeSocket = (server) => {
     });
 
     /**
-     * Handle real-time cell updates.
-     * Clients emit this event when a cell is updated.
-     * @param {Object} data - The cell update data.
-     * @param {string} data.spreadsheetId - The ID of the spreadsheet.
-     * @param {Object} data.cell - The cell data.
+     * Обработчик "cellUpdate" — реальное обновление ячейки в реальном времени.
+     * @param {object} data - { spreadsheetId, cell: {...} }
      */
     socket.on("cellUpdate", async (data) => {
       const { spreadsheetId, cell } = data;
 
       try {
-        // Validate spreadsheet access
+        // Проверяем Spreadsheet и доступ
         const spreadsheet = await Spreadsheet.findByPk(spreadsheetId, {
           include: [{ model: User, as: "Collaborators", attributes: ["id"] }],
         });
@@ -138,54 +130,43 @@ const initializeSocket = (server) => {
           return;
         }
 
-        // Validate cell data
+        // Извлекаем данные ячейки
         const { sheetId, row, column, content, formula, hyperlink } = cell;
-
-        if (
-          typeof sheetId !== "string" ||
-          typeof row !== "number" ||
-          typeof column !== "number"
-        ) {
+        if (typeof sheetId !== "string" || typeof row !== "number" || typeof column !== "number") {
           socket.emit("error", { message: "Invalid cell data" });
           return;
         }
 
-        // Fetch the sheet to ensure it exists
+        // Проверяем, что Sheet существует
         const sheet = await Sheet.findOne({
           where: { id: sheetId, spreadsheetId },
         });
-
         if (!sheet) {
           socket.emit("error", { message: "Sheet not found" });
           return;
         }
 
-        // Evaluate the formula if present
+        // Если есть формула, вычисляем
         let evaluatedContent = content;
         if (formula && formula.startsWith("=")) {
           const evaluationResult = await formulaService.evaluateFormula(
-            formula.slice(1),
-            {
-              spreadsheetId,
-              sheetId,
-              row,
-              column,
-            }
+            formula.slice(1), // убираем "="
+            { spreadsheetId, sheetId, row, column }
           );
 
           if (evaluationResult.error) {
             evaluatedContent = "#ERROR!";
-            // Optionally, send the error back to the client
+            // Отправляем ошибку обратно только этому сокету
             socket.emit("formulaError", {
               cell: { sheetId, row, column },
               error: evaluationResult.error,
             });
           } else {
-            evaluatedContent = evaluationResult.value;
+            evaluatedContent = evaluationResult.value; // предполагаем, что вернётся строка или число
           }
         }
 
-        // Update or create the cell in the database
+        // Создаём или обновляем ячейку в БД
         const [existingCell, created] = await Cell.findOrCreate({
           where: { sheetId, row, column },
           defaults: {
@@ -196,30 +177,24 @@ const initializeSocket = (server) => {
         });
 
         if (!created) {
+          // обновляем, если не новая
           existingCell.content = evaluatedContent;
           existingCell.formula = formula || null;
           existingCell.hyperlink = hyperlink || null;
           await existingCell.save();
         }
 
-        // Handle dependencies
+        // Зависимости формул (если у вас реализован такой сервис)
         if (formula && formula.startsWith("=")) {
-          // Update dependencies in the formula service
-          await formulaService.updateDependencies(
-            existingCell,
-            formula.slice(1)
-          );
+          await formulaService.updateDependencies(existingCell, formula.slice(1));
         } else {
-          // If formula is removed, clear dependencies
           await formulaService.clearDependencies(existingCell);
         }
 
-        // Recalculate dependent cells
-        const affectedCells = await formulaService.recalculateDependentCells(
-          existingCell
-        );
+        // Пересчитываем зависимые ячейки (если реализация есть)
+        const affectedCells = await formulaService.recalculateDependentCells(existingCell);
 
-        // Broadcast the cell updates to other clients in the same spreadsheet room
+        // Рассылаем всем в комнате обновление ячеек
         io.to(spreadsheetId).emit("cellsUpdated", {
           spreadsheetId,
           cells: [existingCell, ...affectedCells],
@@ -230,12 +205,10 @@ const initializeSocket = (server) => {
       }
     });
 
-    /**
-     * Handle user disconnection.
-     */
+    // Событие отключения сокета
     socket.on("disconnect", () => {
       logger.info(`User disconnected: ${socket.userId}`);
-      // Optionally, broadcast user disconnect if needed
+      // Если нужно, можно уведомить комнату, что пользователь вышел
     });
   });
 
@@ -243,9 +216,8 @@ const initializeSocket = (server) => {
 };
 
 /**
- * Get the initialized Socket.io instance.
- * Throws an error if Socket.io has not been initialized.
- * @returns {Server} - The Socket.io server instance.
+ * Возвращает инициализированный экземпляр Socket.io.
+ * Бросает ошибку, если Socket.io не был проинициализирован.
  */
 const getIO = () => {
   if (!io) {
