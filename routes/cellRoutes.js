@@ -233,6 +233,159 @@ router.get(
 
 /**
  * @swagger
+ * /spreadsheets/{spreadsheetId}/sheets/{sheetId}/cells/{row}/{column}:
+ *   put:
+ *     summary: Update a specific cell
+ *     description: Create a new cell or update an existing cell's content, formula, or hyperlink within a specific sheet and spreadsheet.
+ *     tags: [Cells]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: spreadsheetId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The UUID of the spreadsheet
+ *       - in: path
+ *         name: sheetId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The UUID of the sheet
+ *       - in: path
+ *         name: row
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Row number (positive integer)
+ *       - in: path
+ *         name: column
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Column number (positive integer)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               content:
+ *                 type: string
+ *                 nullable: true
+ *                 description: Content of the cell
+ *               formula:
+ *                 type: string
+ *                 nullable: true
+ *                 description: Formula of the cell
+ *               hyperlink:
+ *                 type: string
+ *                 format: uri
+ *                 nullable: true
+ *                 description: Hyperlink of the cell
+ *     responses:
+ *       200:
+ *         description: Cell created or updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 cell:
+ *                   $ref: '#/components/schemas/Cell'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 errors:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       msg:
+ *                         type: string
+ *                       param:
+ *                         type: string
+ *                       location:
+ *                         type: string
+ *       403:
+ *         description: Access denied to modify cells
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Access denied to modify cells"
+ *       404:
+ *         description: Spreadsheet or sheet not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Spreadsheet or sheet not found"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Internal server error"
+ */
+router.put(
+  "/:row/:column",
+  [
+    param("spreadsheetId").isUUID().withMessage("Invalid spreadsheet ID format"),
+    param("sheetId").isUUID().withMessage("Invalid sheet ID format"),
+    param("row").isInt({ min: 1 }).withMessage("Row must be a positive integer"),
+    param("column").isInt({ min: 1 }).withMessage("Column must be a positive integer"),
+    body("content")
+      .optional()
+      .custom((value) => {
+        if (value === null || typeof value === "string") {
+          return true;
+        }
+        throw new Error("Content must be a string or null");
+      }),
+    body("formula")
+      .optional()
+      .custom((value) => {
+        if (value === null || typeof value === "string") {
+          return true;
+        }
+        throw new Error("Formula must be a string or null");
+      }),
+    body("hyperlink")
+      .optional()
+      .custom((value) => {
+        if (value === null || typeof value === "string") {
+          return true;
+        }
+        throw new Error("Hyperlink must be a string or null");
+      }),
+    validateRequest,
+  ],
+  cellController.createOrUpdateCell
+);
+
+/**
+ * @swagger
  * /spreadsheets/{spreadsheetId}/sheets/{sheetId}/cells:
  *   put:
  *     summary: Bulk create or update cells within a sheet
