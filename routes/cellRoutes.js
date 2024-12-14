@@ -19,7 +19,20 @@ const { bulkUpdateCellsValidator } = require("../validators/cellValidators");
  * /spreadsheets/{spreadsheetId}/sheets/{sheetId}/cells:
  *   post:
  *     summary: Create or update a cell
- *     description: Create a new cell or update an existing cell in a sheet.
+ *     description: >
+ *       Create a new cell or update an existing cell in a sheet.
+ *       **Emits Events:**
+ *       - `cellUpdated`: Emitted after a cell is created or updated.
+ *         - **Data Payload:**
+ *           ```json
+ *           {
+ *             "spreadsheetId": "string",
+ *             "cell": {
+ *               "row": integer,
+ *               "column": integer
+ *             }
+ *           }
+ *           ```
  *     tags: [Cells]
  *     security:
  *       - bearerAuth: []
@@ -76,16 +89,39 @@ const { bulkUpdateCellsValidator } = require("../validators/cellValidators");
  *             schema:
  *               type: object
  *               properties:
- *                 cell:
- *                   $ref: '#/components/schemas/Cell'
+ *                 message:
+ *                   type: string
+ *                   example: "Cell updated successfully"
+ *                 row:
+ *                   type: integer
+ *                   example: 1
+ *                 column:
+ *                   type: integer
+ *                   example: 1
  *       400:
  *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       403:
  *         description: Access denied to modify cells
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: Spreadsheet or sheet not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
  *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   "/",
@@ -108,9 +144,125 @@ router.post(
 /**
  * @swagger
  * /spreadsheets/{spreadsheetId}/sheets/{sheetId}/cells:
+ *   put:
+ *     summary: Bulk create or update cells within a sheet
+ *     description: >
+ *       Bulk create or update multiple cells within a sheet.
+ *       **Emits Events:**
+ *       - `cellsUpdated`: Emitted after multiple cells are updated.
+ *         - **Data Payload:**
+ *           ```json
+ *           {
+ *             "spreadsheetId": "string",
+ *             "updatedCount": integer
+ *           }
+ *           ```
+ *     tags: [Cells]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: spreadsheetId
+ *         required: true
+ *         description: Spreadsheet ID
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: sheetId
+ *         required: true
+ *         description: Sheet ID
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - cells
+ *             properties:
+ *               cells:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - row
+ *                     - column
+ *                   properties:
+ *                     row:
+ *                       type: integer
+ *                       example: 1
+ *                     column:
+ *                       type: integer
+ *                       example: 1
+ *                     content:
+ *                       type: string
+ *                       example: "Hello World"
+ *                     formula:
+ *                       type: string
+ *                       example: "=SUM(A1:A10)"
+ *                     hyperlink:
+ *                       type: string
+ *                       format: uri
+ *                       example: "https://example.com"
+ *     responses:
+ *       '200':
+ *         description: Cells updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Cells updated successfully"
+ *                 updatedCount:
+ *                   type: integer
+ *                   example: 5
+ *       '400':
+ *         description: Bad request, invalid input
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '403':
+ *         description: Access denied
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '404':
+ *         description: Spreadsheet or sheet not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '500':
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.put(
+  "/",
+  bulkUpdateCellsValidator,
+  validateRequest,
+  cellController.bulkCreateOrUpdateCells
+);
+
+/**
+ * @swagger
+ * /spreadsheets/{spreadsheetId}/sheets/{sheetId}/cells:
  *   get:
  *     summary: Get all cells in a sheet
- *     description: Retrieve all cells within a specific sheet.
+ *     description: >
+ *       Retrieve all cells within a specific sheet.
+ *       **Emits Events:**
+ *       - No events emitted.
  *     tags: [Cells]
  *     security:
  *       - bearerAuth: []
@@ -131,24 +283,53 @@ router.post(
  *         description: The UUID of the sheet
  *     responses:
  *       200:
- *         description: A list of cells
+ *         description: Cells retrieved successfully
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Cells retrieved successfully"
  *                 cells:
  *                   type: array
  *                   items:
- *                     $ref: '#/components/schemas/Cell'
+ *                     type: object
+ *                     properties:
+ *                       row:
+ *                         type: integer
+ *                         example: 1
+ *                       column:
+ *                         type: integer
+ *                         example: 2
+ *                       content:
+ *                         type: string
+ *                         example: "Sample Content"
  *       400:
  *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       403:
  *         description: Access denied to get cells
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: Spreadsheet or sheet not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
  *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get(
   "/",
@@ -167,7 +348,10 @@ router.get(
  * /spreadsheets/{spreadsheetId}/sheets/{sheetId}/cells/{row}/{column}:
  *   get:
  *     summary: Get a specific cell
- *     description: Retrieve a specific cell by row and column numbers.
+ *     description: >
+ *       Retrieve a specific cell by row and column numbers.
+ *       **Emits Events:**
+ *       - No events emitted.
  *     tags: [Cells]
  *     security:
  *       - bearerAuth: []
@@ -208,16 +392,42 @@ router.get(
  *             schema:
  *               type: object
  *               properties:
- *                 cell:
- *                   $ref: '#/components/schemas/Cell'
+ *                 message:
+ *                   type: string
+ *                   example: "Cell retrieved successfully"
+ *                 row:
+ *                   type: integer
+ *                   example: 1
+ *                 column:
+ *                   type: integer
+ *                   example: 2
+ *                 content:
+ *                   type: string
+ *                   example: "Foo"
  *       400:
  *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       403:
  *         description: Access denied to get cell
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: Spreadsheet, sheet, or cell not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
  *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get(
   "/:row/:column",
@@ -242,7 +452,20 @@ router.get(
  * /spreadsheets/{spreadsheetId}/sheets/{sheetId}/cells/{row}/{column}:
  *   put:
  *     summary: Update a specific cell
- *     description: Create a new cell or update an existing cell's content, formula, or hyperlink within a specific sheet and spreadsheet.
+ *     description: >
+ *       Create a new cell or update an existing cell's content, formula, or hyperlink.
+ *       **Emits Events:**
+ *       - `cellUpdated`: Emitted after a cell is created or updated.
+ *         - **Data Payload:**
+ *           ```json
+ *           {
+ *             "spreadsheetId": "string",
+ *             "cell": {
+ *               "row": integer,
+ *               "column": integer
+ *             }
+ *           }
+ *           ```
  *     tags: [Cells]
  *     security:
  *       - bearerAuth: []
@@ -303,56 +526,39 @@ router.get(
  *             schema:
  *               type: object
  *               properties:
- *                 cell:
- *                   $ref: '#/components/schemas/Cell'
+ *                 message:
+ *                   type: string
+ *                   example: "Cell updated successfully"
+ *                 row:
+ *                   type: integer
+ *                   example: 1
+ *                 column:
+ *                   type: integer
+ *                   example: 2
  *       400:
  *         description: Validation error
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 errors:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       msg:
- *                         type: string
- *                       param:
- *                         type: string
- *                       location:
- *                         type: string
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       403:
  *         description: Access denied to modify cells
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Access denied to modify cells"
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: Spreadsheet or sheet not found
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Spreadsheet or sheet not found"
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
  *         description: Internal server error
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Internal server error"
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.put(
   "/:row/:column",
@@ -398,98 +604,25 @@ router.put(
 
 /**
  * @swagger
- * /spreadsheets/{spreadsheetId}/sheets/{sheetId}/cells:
- *   put:
- *     summary: Bulk create or update cells within a sheet
- *     tags: [Cells]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: spreadsheetId
- *         required: true
- *         description: Spreadsheet ID
- *         schema:
- *           type: string
- *           example: "550e8400-e29b-41d4-a716-446655440000"
- *       - in: path
- *         name: sheetId
- *         required: true
- *         description: Sheet ID
- *         schema:
- *           type: string
- *           example: "660e8400-e29b-41d4-a716-446655440000"
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - cells
- *             properties:
- *               cells:
- *                 type: array
- *                 items:
- *                   type: object
- *                   required:
- *                     - row
- *                     - column
- *                   properties:
- *                     row:
- *                       type: integer
- *                       example: 1
- *                     column:
- *                       type: integer
- *                       example: 1
- *                     content:
- *                       type: string
- *                       example: "Hello World"
- *                     formula:
- *                       type: string
- *                       example: "=SUM(A1:A10)"
- *                     hyperlink:
- *                       type: string
- *                       format: uri
- *                       example: "https://example.com"
- *     responses:
- *       '200':
- *         description: Cells updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Cells updated successfully"
- *                 cells:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Cell'
- *       '400':
- *         description: Bad request, invalid input
- *       '403':
- *         description: Access denied
- *       '404':
- *         description: Spreadsheet or sheet not found
- */
-router.put(
-  "/",
-  bulkUpdateCellsValidator,
-  validateRequest,
-  cellController.bulkCreateOrUpdateCells
-);
-
-/**
- * @swagger
  * /spreadsheets/{spreadsheetId}/sheets/{sheetId}/cells/{row}/{column}:
  *   delete:
  *     summary: Delete a cell
- *     description: Delete a specific cell by row and column numbers.
+ *     description: >
+ *       Delete a specific cell by row and column numbers.
+ *       **Emits Events:**
+ *       - `cellDeleted`: Emitted after a cell is deleted.
+ *         - **Data Payload:**
+ *           ```json
+ *           {
+ *             "spreadsheetId": "string",
+ *             "sheetId": "string",
+ *             "row": integer,
+ *             "column": integer
+ *           }
+ *           ```
+ *     tags: [Cells]
  *     security:
  *       - bearerAuth: []
- *     tags: [Cells]
  *     parameters:
  *       - in: path
  *         name: spreadsheetId
@@ -529,15 +662,31 @@ router.put(
  *               properties:
  *                 message:
  *                   type: string
- *                   example: Cell deleted successfully
+ *                   example: "Cell deleted successfully"
  *       400:
  *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       403:
  *         description: Only owner can delete cells
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: Spreadsheet, sheet, or cell not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
  *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.delete(
   "/:row/:column",

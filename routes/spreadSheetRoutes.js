@@ -1,6 +1,9 @@
+// routes/spreadsheetRoutes.js
+
 const express = require("express");
 const { body, param } = require("express-validator");
 const spreadsheetController = require("../controllers/spreadsheetController");
+const validateRequest = require("../middleware/validateRequest");
 
 const router = express.Router();
 
@@ -16,6 +19,20 @@ const router = express.Router();
  * /spreadsheets:
  *   post:
  *     summary: Create a new spreadsheet
+ *     description: >
+ *       Create a new spreadsheet with a default sheet.
+ *       **Emits Events:**
+ *       - `spreadsheetCreated`: Emitted after a spreadsheet is created.
+ *         - **Data Payload:**
+ *           ```json
+ *           {
+ *             "spreadsheet": {
+ *               "id": "string",
+ *               "name": "string",
+ *               "ownerId": "string"
+ *             }
+ *           }
+ *           ```
  *     tags: [Spreadsheets]
  *     security:
  *       - bearerAuth: []
@@ -39,10 +56,25 @@ const router = express.Router();
  *             schema:
  *               type: object
  *               properties:
- *                 spreadsheet:
- *                   $ref: '#/components/schemas/Spreadsheet'
+ *                 message:
+ *                   type: string
+ *                   example: "Spreadsheet created successfully"
+ *                 spreadsheetId:
+ *                   type: string
+ *                   format: uuid
+ *                   example: "550e8400-e29b-41d4-a716-446655440000"
  *       '400':
  *         description: Bad request, invalid input
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '500':
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   "/",
@@ -59,25 +91,54 @@ router.post(
  * /spreadsheets:
  *   get:
  *     summary: Get all spreadsheets the user owns or collaborates on
+ *     description: >
+ *       Retrieve all spreadsheets that the authenticated user owns or collaborates on.
+ *       **Emits Events:**
+ *       - No events emitted.
  *     tags: [Spreadsheets]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       '200':
- *         description: List of spreadsheets
+ *         description: Spreadsheets retrieved successfully
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Spreadsheets retrieved successfully"
  *                 ownedSpreadsheets:
  *                   type: array
  *                   items:
- *                     $ref: '#/components/schemas/Spreadsheet'
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         format: uuid
+ *                         example: "550e8400-e29b-41d4-a716-446655440000"
+ *                       name:
+ *                         type: string
+ *                         example: "Owner's Spreadsheet"
  *                 collaboratedSpreadsheets:
  *                   type: array
  *                   items:
- *                     $ref: '#/components/schemas/Spreadsheet'
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         format: uuid
+ *                         example: "770e8400-e29b-41d4-a716-446655440222"
+ *                       name:
+ *                         type: string
+ *                         example: "Collaborator's Spreadsheet"
+ *       '500':
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get("/", spreadsheetController.getSpreadsheets);
 
@@ -86,6 +147,10 @@ router.get("/", spreadsheetController.getSpreadsheets);
  * /spreadsheets/{id}:
  *   get:
  *     summary: Get a spreadsheet by ID
+ *     description: >
+ *       Retrieve detailed information about a specific spreadsheet.
+ *       **Emits Events:**
+ *       - No events emitted.
  *     tags: [Spreadsheets]
  *     security:
  *       - bearerAuth: []
@@ -100,45 +165,89 @@ router.get("/", spreadsheetController.getSpreadsheets);
  *           example: "550e8400-e29b-41d4-a716-446655440000"
  *     responses:
  *       '200':
- *         description: Spreadsheet details
+ *         description: Spreadsheet details retrieved successfully
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Spreadsheet details retrieved successfully"
  *                 spreadsheet:
  *                   type: object
  *                   properties:
  *                     id:
  *                       type: string
  *                       format: uuid
+ *                       example: "550e8400-e29b-41d4-a716-446655440000"
  *                     name:
  *                       type: string
+ *                       example: "My Spreadsheet"
  *                     ownerId:
  *                       type: string
  *                       format: uuid
- *                     createdAt:
- *                       type: string
- *                       format: date-time
- *                     updatedAt:
- *                       type: string
- *                       format: date-time
+ *                       example: "123e4567-e89b-12d3-a456-426614174000"
  *                     Sheets:
  *                       type: array
  *                       items:
- *                         $ref: '#/components/schemas/Sheet'
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             format: uuid
+ *                             example: "660e8400-e29b-41d4-a716-446655440111"
+ *                           name:
+ *                             type: string
+ *                             example: "Sheet1"
  *                     Collaborators:
  *                       type: array
  *                       items:
- *                         $ref: '#/components/schemas/User'
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             format: uuid
+ *                             example: "223e4567-e89b-12d3-a456-426614174111"
+ *                           username:
+ *                             type: string
+ *                             example: "collaboratorUser"
+ *                           email:
+ *                             type: string
+ *                             format: email
+ *                             example: "collab@example.com"
  *                     owner:
- *                       $ref: '#/components/schemas/User' # If included
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                           format: uuid
+ *                           example: "123e4567-e89b-12d3-a456-426614174000"
+ *                         username:
+ *                           type: string
+ *                           example: "ownerUser"
+ *                         email:
+ *                           type: string
+ *                           format: email
+ *                           example: "owner@example.com"
  *       '403':
  *         description: Access denied
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       '404':
  *         description: Spreadsheet not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       '400':
  *         description: Bad request, invalid input
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get(
   "/:id",
@@ -151,6 +260,17 @@ router.get(
  * /spreadsheets/{id}:
  *   put:
  *     summary: Update a spreadsheet's name
+ *     description: >
+ *       Update the name of a specific spreadsheet.
+ *       **Emits Events:**
+ *       - `spreadsheetUpdated`: Emitted after a spreadsheet is updated.
+ *         - **Data Payload:**
+ *           ```json
+ *           {
+ *             "spreadsheetId": "string",
+ *             "newName": "string"
+ *           }
+ *           ```
  *     tags: [Spreadsheets]
  *     security:
  *       - bearerAuth: []
@@ -180,12 +300,34 @@ router.get(
  *             schema:
  *               type: object
  *               properties:
- *                 spreadsheet:
- *                   $ref: '#/components/schemas/Spreadsheet'
+ *                 message:
+ *                   type: string
+ *                   example: "Spreadsheet updated successfully"
+ *                 spreadsheetId:
+ *                   type: string
+ *                   format: uuid
+ *                   example: "550e8400-e29b-41d4-a716-446655440000"
+ *                 newName:
+ *                   type: string
+ *                   example: "Updated Spreadsheet Name"
+ *       '400':
+ *         description: Bad request, invalid input
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       '403':
  *         description: Access denied
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       '404':
  *         description: Spreadsheet not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.put(
   "/:id",
@@ -204,6 +346,16 @@ router.put(
  * /spreadsheets/{id}:
  *   delete:
  *     summary: Delete a spreadsheet
+ *     description: >
+ *       Delete a specific spreadsheet. Only the owner can perform this action.
+ *       **Emits Events:**
+ *       - `spreadsheetDeleted`: Emitted after a spreadsheet is deleted.
+ *         - **Data Payload:**
+ *           ```json
+ *           {
+ *             "spreadsheetId": "string"
+ *           }
+ *           ```
  *     tags: [Spreadsheets]
  *     security:
  *       - bearerAuth: []
@@ -218,10 +370,38 @@ router.put(
  *     responses:
  *       '200':
  *         description: Spreadsheet deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Spreadsheet deleted successfully"
  *       '403':
  *         description: Access denied
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       '404':
  *         description: Spreadsheet not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '400':
+ *         description: Invalid spreadsheet ID
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '500':
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.delete(
   "/:id",
@@ -234,6 +414,20 @@ router.delete(
  * /spreadsheets/{id}/add-collaborator:
  *   post:
  *     summary: Add a collaborator to a spreadsheet
+ *     description: >
+ *       Add a new collaborator to a specific spreadsheet. Only the owner can perform this action.
+ *       **Emits Events:**
+ *       - `collaboratorAdded`: Emitted after a collaborator is added.
+ *         - **Data Payload:**
+ *           ```json
+ *           {
+ *             "spreadsheetId": "string",
+ *             "collaborator": {
+ *               "id": "string",
+ *               "email": "string"
+ *             }
+ *           }
+ *           ```
  *     tags: [Spreadsheets]
  *     security:
  *       - bearerAuth: []
@@ -261,12 +455,42 @@ router.delete(
  *     responses:
  *       '200':
  *         description: Collaborator added successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Collaborator added successfully"
+ *                 collaboratorId:
+ *                   type: string
+ *                   format: uuid
+ *                   example: "223e4567-e89b-12d3-a456-426614174111"
  *       '400':
- *         description: Bad request, invalid input
+ *         description: Bad request, invalid input or collaborator already exists
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       '403':
  *         description: Access denied
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       '404':
  *         description: Spreadsheet or collaborator not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '500':
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   "/:id/add-collaborator",
@@ -286,6 +510,20 @@ router.post(
  * /spreadsheets/{id}/remove-collaborator:
  *   delete:
  *     summary: Remove a collaborator from a spreadsheet by email
+ *     description: >
+ *       Remove an existing collaborator from a specific spreadsheet. Only the owner can perform this action.
+ *       **Emits Events:**
+ *       - `collaboratorRemoved`: Emitted after a collaborator is removed.
+ *         - **Data Payload:**
+ *           ```json
+ *           {
+ *             "spreadsheetId": "string",
+ *             "collaborator": {
+ *               "id": "string",
+ *               "email": "string"
+ *             }
+ *           }
+ *           ```
  *     tags: [Spreadsheets]
  *     security:
  *       - bearerAuth: []
@@ -313,12 +551,38 @@ router.post(
  *     responses:
  *       '200':
  *         description: Collaborator removed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Collaborator removed successfully"
  *       '400':
- *         description: Bad request, invalid input
+ *         description: Bad request, invalid input or collaborator not a member
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       '403':
  *         description: Access denied
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       '404':
  *         description: Spreadsheet or collaborator not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '500':
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.delete(
   "/:id/remove-collaborator",

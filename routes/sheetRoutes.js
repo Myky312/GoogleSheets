@@ -19,6 +19,20 @@ const router = express.Router({ mergeParams: true });
  * /spreadsheets/{id}/sheets:
  *   post:
  *     summary: Create a new sheet in a spreadsheet
+ *     description: >
+ *       Create a new sheet within a specified spreadsheet.
+ *       **Emits Events:**
+ *       - `sheetCreated`: Emitted after a sheet is created.
+ *         - **Data Payload:**
+ *           ```json
+ *           {
+ *             "spreadsheetId": "string",
+ *             "sheet": {
+ *               "id": "string",
+ *               "name": "string"
+ *             }
+ *           }
+ *           ```
  *     tags: [Sheets]
  *     security:
  *       - bearerAuth: []
@@ -29,6 +43,7 @@ const router = express.Router({ mergeParams: true });
  *         description: Spreadsheet ID
  *         schema:
  *           type: string
+ *           format: uuid
  *           example: "550e8400-e29b-41d4-a716-446655440000"
  *     requestBody:
  *       required: true
@@ -50,14 +65,37 @@ const router = express.Router({ mergeParams: true });
  *             schema:
  *               type: object
  *               properties:
- *                 sheet:
- *                   $ref: '#/components/schemas/Sheet'
+ *                 message:
+ *                   type: string
+ *                   example: "Sheet created successfully"
+ *                 sheetId:
+ *                   type: string
+ *                   format: uuid
+ *                   example: "660e8400-e29b-41d4-a716-446655440111"
  *       '400':
  *         description: Bad request, invalid input
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       '403':
  *         description: Access denied
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       '404':
  *         description: Spreadsheet not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '500':
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   "/",
@@ -74,6 +112,10 @@ router.post(
  * /spreadsheets/{id}/sheets:
  *   get:
  *     summary: Get all sheets in a spreadsheet
+ *     description: >
+ *       Retrieve all sheets within a specified spreadsheet.
+ *       **Emits Events:**
+ *       - No events emitted.
  *     tags: [Sheets]
  *     security:
  *       - bearerAuth: []
@@ -84,23 +126,49 @@ router.post(
  *         description: Spreadsheet ID
  *         schema:
  *           type: string
+ *           format: uuid
  *           example: "550e8400-e29b-41d4-a716-446655440000"
  *     responses:
  *       '200':
- *         description: List of sheets
+ *         description: Sheets retrieved successfully
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Sheets retrieved successfully"
  *                 sheets:
  *                   type: array
  *                   items:
- *                     $ref: '#/components/schemas/Sheet'
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         format: uuid
+ *                         example: "660e8400-e29b-41d4-a716-446655440111"
+ *                       name:
+ *                         type: string
+ *                         example: "Sheet1"
  *       '403':
  *         description: Access denied
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       '404':
  *         description: Spreadsheet not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '500':
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get(
   "/",
@@ -116,6 +184,10 @@ router.get(
  * /spreadsheets/{id}/sheets/{sheetId}:
  *   get:
  *     summary: Get a specific sheet by ID
+ *     description: >
+ *       Retrieve details of a specific sheet by its ID.
+ *       **Emits Events:**
+ *       - No events emitted.
  *     tags: [Sheets]
  *     security:
  *       - bearerAuth: []
@@ -126,6 +198,7 @@ router.get(
  *         description: Spreadsheet ID
  *         schema:
  *           type: string
+ *           format: uuid
  *           example: "550e8400-e29b-41d4-a716-446655440000"
  *       - in: path
  *         name: sheetId
@@ -133,21 +206,41 @@ router.get(
  *         description: Sheet ID
  *         schema:
  *           type: string
+ *           format: uuid
  *           example: "660e8400-e29b-41d4-a716-446655440111"
  *     responses:
  *       '200':
- *         description: Sheet details
+ *         description: Sheet retrieved successfully
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Sheet retrieved successfully"
  *                 sheet:
- *                   $ref: '#/components/schemas/Sheet'
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       format: uuid
+ *                       example: "660e8400-e29b-41d4-a716-446655440111"
+ *                     name:
+ *                       type: string
+ *                       example: "Sheet1"
  *       '403':
  *         description: Access denied
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       '404':
  *         description: Sheet not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get(
   "/:sheetId",
@@ -164,6 +257,20 @@ router.get(
  * /spreadsheets/{id}/sheets/{sheetId}:
  *   put:
  *     summary: Update a sheet by ID
+ *     description: >
+ *       Update the name of a specific sheet.
+ *       **Emits Events:**
+ *       - `sheetUpdated`: Emitted after a sheet is updated.
+ *         - **Data Payload:**
+ *           ```json
+ *           {
+ *             "spreadsheetId": "string",
+ *             "sheet": {
+ *               "id": "string",
+ *               "name": "string"
+ *             }
+ *           }
+ *           ```
  *     tags: [Sheets]
  *     security:
  *       - bearerAuth: []
@@ -202,14 +309,40 @@ router.get(
  *             schema:
  *               type: object
  *               properties:
- *                 sheet:
- *                   $ref: '#/components/schemas/Sheet'
+ *                 message:
+ *                   type: string
+ *                   example: "Sheet updated successfully"
+ *                 sheetId:
+ *                   type: string
+ *                   format: uuid
+ *                   example: "660e8400-e29b-41d4-a716-446655440111"
+ *                 newName:
+ *                   type: string
+ *                   example: "Updated Sheet Name"
  *       '400':
  *         description: Bad request, invalid input
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       '403':
  *         description: Access denied
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       '404':
  *         description: Sheet not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '500':
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.put(
   "/:sheetId",
@@ -227,6 +360,17 @@ router.put(
  * /spreadsheets/{id}/sheets/{sheetId}:
  *   delete:
  *     summary: Delete a sheet by ID
+ *     description: >
+ *       Delete a specific sheet within a spreadsheet.
+ *       **Emits Events:**
+ *       - `sheetDeleted`: Emitted after a sheet is deleted.
+ *         - **Data Payload:**
+ *           ```json
+ *           {
+ *             "spreadsheetId": "string",
+ *             "sheetId": "string"
+ *           }
+ *           ```
  *     tags: [Sheets]
  *     security:
  *       - bearerAuth: []
@@ -248,10 +392,26 @@ router.put(
  *     responses:
  *       '200':
  *         description: Sheet deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Sheet deleted successfully"
  *       '403':
  *         description: Access denied
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       '404':
  *         description: Sheet not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.delete(
   "/:sheetId",
