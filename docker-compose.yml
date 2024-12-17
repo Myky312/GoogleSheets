@@ -1,0 +1,56 @@
+version: '3.8'  # Ensure you're using a compatible version
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spreadsheet-backend
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env    # Load environment variables from .env
+    depends_on:
+      - db
+    environment:
+      - DOCKER_ENV=true
+
+  db:
+    image: postgres:17
+    container_name: spreadsheet-db
+    environment:
+      POSTGRES_DB: spreadsheetdb
+      POSTGRES_USER: sheetuser
+      POSTGRES_PASSWORD: 5675
+    ports:
+      - "5433:5432"  # Host port 5433 mapped to container port 5432
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./docker-init/:/docker-entrypoint-initdb.d/  # Mount the init scripts directory
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "sheetuser", "-d", "spreadsheetdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spreadsheet-backend-tests
+    depends_on:
+      - db
+    env_file:
+      - .env.test
+    environment:
+      - DOCKER_ENV=true
+      - NODE_ENV=test
+    command:
+      [
+        "sh",
+        "-c",
+        "npx sequelize-cli db:migrate --config ./config/config.js && npm test -- --verbose",
+      ]
+
+volumes:
+  db_data:

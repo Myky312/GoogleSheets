@@ -1,19 +1,44 @@
 // config/config.js
 
-require("dotenv").config();
-const env = process.env.NODE_ENV || "development";
+// Load environment variables based on NODE_ENV
+if (process.env.NODE_ENV === 'test') {
+  require('dotenv').config({ path: '.env.test' });
+} else {
+  require('dotenv').config(); // loads ".env" by default
+}
+
+const isDocker = process.env.DOCKER_ENV === 'true';
+
+let databaseUrl;
+let testDatabaseUrl;
+
+// Determine the appropriate database URL based on the environment and Docker
+if (process.env.NODE_ENV === 'test') {
+  databaseUrl = isDocker
+    ? process.env.TEST_DATABASE_URL_DOCKER
+    : process.env.TEST_DATABASE_URL_LOCAL;
+} else {
+  // development or production
+  databaseUrl = isDocker
+    ? process.env.DATABASE_URL_DOCKER
+    : process.env.DATABASE_URL_LOCAL;
+}
+
+// Only set testDatabaseUrl if in test mode
+testDatabaseUrl = isDocker
+  ? process.env.TEST_DATABASE_URL_DOCKER
+  : process.env.TEST_DATABASE_URL_LOCAL;
+
 const config = {
   development: {
-    url: process.env.DATABASE_URL,
+    url: databaseUrl,
     dialect: "postgres",
     migrationStorage: 'sequelize',
     migrationStorageTableName: 'SequelizeMeta',
     logging: console.log,
   },
   test: {
-    url:
-      process.env.TEST_DATABASE_URL ||
-      "postgres://sheetuser:5675@localhost:5432/spreadsheetdb_test",
+    url: testDatabaseUrl,
     dialect: "postgres",
     migrationStorage: 'sequelize',
     migrationStorageTableName: 'SequelizeMeta',
@@ -26,11 +51,5 @@ const config = {
     migrationStorageTableName: 'SequelizeMeta',
   },
 };
-
-// Enhanced Logging
-// console.log("====================================");
-// console.log(`Running in '${env}' environment`);
-// console.log(`Using DATABASE_URL: ${config[env].url}`);
-// console.log("====================================");
 
 module.exports = config;
