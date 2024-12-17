@@ -181,6 +181,25 @@ const options = {
           },
           required: ["id", "sheetId", "row", "column"],
         },
+        ErrorResponse: {
+          type: "object",
+          properties: {
+            message: {
+              type: "string",
+              description: "Error message describing what went wrong",
+              example: "Invalid input data",
+            },
+            errors: {
+              type: "array",
+              description: "Detailed list of validation errors",
+              items: {
+                type: "string",
+                example: "Row number must be a positive integer",
+              },
+            },
+          },
+          required: ["message"],
+        }
       },
     },
   },

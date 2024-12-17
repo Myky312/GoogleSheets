@@ -56,11 +56,9 @@ exports.bulkCreateOrUpdateCells = async (req, res, next) => {
           const evaluatedValue = await evaluateFormula(expression, sheetId);
           cell.content = evaluatedValue.toString(); // store numeric result as string
         } catch (err) {
-          return res
-            .status(400)
-            .json({
-              message: `Formula evaluation error in cell (row ${cell.row}, col ${cell.column}): ${err.message}`,
-            });
+          return res.status(400).json({
+            message: `Formula evaluation error in cell (row ${cell.row}, col ${cell.column}): ${err.message}`,
+          });
         }
       }
     }
@@ -71,8 +69,8 @@ exports.bulkCreateOrUpdateCells = async (req, res, next) => {
       row: cell.row,
       column: cell.column,
       content: cell.content,
-      formula: cell.formula,
-      hyperlink: cell.hyperlink,
+      formula: cell.formula !== undefined ? cell.formula : null,
+      hyperlink: cell.hyperlink !== undefined ? cell.hyperlink : null,
       updatedAt: new Date(),
       createdAt: new Date(),
     }));
@@ -83,15 +81,14 @@ exports.bulkCreateOrUpdateCells = async (req, res, next) => {
       returning: true,
     });
 
-    // Emit real-time updates for each upserted cell
+    // Emit a single real-time update event containing all updated cells
     const io = getIO();
-    upsertedCells.forEach((cell) => {
-      io.to(spreadsheetId).emit("cellUpdated", { cell });
-    });
+    io.to(spreadsheetId).emit("cellsUpdated", { cells: upsertedCells });
 
-    return res
-      .status(200)
-      .json({ message: "Cells updated successfully", cells: upsertedCells });
+    return res.status(200).json({
+      message: "Cells updated successfully",
+      cells: upsertedCells,
+    });
   } catch (error) {
     next(error);
   }
@@ -326,3 +323,102 @@ exports.deleteCell = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Delete an entire row within a sheet.
+ * Only the owner can perform this action.
+ */
+exports.deleteRow = async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    const { spreadsheetId, sheetId, row } = req.params;
+    const userId = req.user.id;
+
+    // Fetch the spreadsheet
+    const spreadsheet = await Spreadsheet.findByPk(spreadsheetId);
+    if (!spreadsheet) {
+      return res.status(404).json({ message: "Spreadsheet not found" });
+    }
+
+    // Authorization check
+    if (spreadsheet.ownerId !== userId && !(await spreadsheet.hasCollaborator(userId))) {
+      return res.status(403).json({ message: "Only owner can delete rows" });
+    }
+
+    // Fetch the sheet
+    const sheet = await Sheet.findOne({ where: { id: sheetId, spreadsheetId } });
+    if (!sheet) {
+      return res.status(404).json({ message: "Sheet not found" });
+    }
+
+    // Delete cells in the specified row
+    const deletedCount = await Cell.destroy({ where: { sheetId, row } });
+
+    // Emit Socket.IO event
+    const io = getIO();
+    io.to(spreadsheetId).emit("rowDeleted", { spreadsheetId, sheetId, row, deletedCount });
+
+    return res.status(200).json({
+      message: "Row deleted successfully",
+      sheetId,
+      row,
+      deletedCount,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+/**
+ * Delete an entire column within a sheet.
+ * Only the owner can perform this action.
+ */
+exports.deleteColumn = async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    const { spreadsheetId, sheetId, column } = req.params;
+    const userId = req.user.id;
+
+    // Fetch the spreadsheet
+    const spreadsheet = await Spreadsheet.findByPk(spreadsheetId);
+    if (!spreadsheet) {
+      return res.status(404).json({ message: "Spreadsheet not found" });
+    }
+
+    // Authorization check
+    if (spreadsheet.ownerId !== userId && !(await spreadsheet.hasCollaborator(userId))) {
+      return res.status(403).json({ message: "Only owner can delete columns" });
+    }
+
+    // Fetch the sheet
+    const sheet = await Sheet.findOne({ where: { id: sheetId, spreadsheetId } });
+    if (!sheet) {
+      return res.status(404).json({ message: "Sheet not found" });
+    }
+
+    // Delete cells in the specified column
+    const deletedCount = await Cell.destroy({ where: { sheetId, column } });
+
+    // Emit Socket.IO event
+    const io = getIO();
+    io.to(spreadsheetId).emit("columnDeleted", { spreadsheetId, sheetId, column, deletedCount });
+
+    // Respond to client
+    return res.status(200).json({
+      message: "Column deleted successfully",
+      sheetId,
+      column,
+      deletedCount,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

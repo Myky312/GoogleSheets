@@ -5,7 +5,11 @@ const router = express.Router({ mergeParams: true });
 const { body, param } = require("express-validator");
 const cellController = require("../controllers/cellController");
 const validateRequest = require("../middleware/validateRequest");
-const { bulkUpdateCellsValidator } = require("../validators/cellValidators");
+const {
+  bulkUpdateCellsValidator,
+  deleteRowValidator,
+  deleteColumnValidator,
+} = require("../validators/cellValidators");
 
 /**
  * @swagger
@@ -26,10 +30,16 @@ const { bulkUpdateCellsValidator } = require("../validators/cellValidators");
  *         - **Data Payload:**
  *           ```json
  *           {
- *             "spreadsheetId": "string",
  *             "cell": {
+ *               "id": "string",
+ *               "sheetId": "string",
  *               "row": integer,
- *               "column": integer
+ *               "column": integer,
+ *               "content": "string",
+ *               "formula": "string",
+ *               "hyperlink": "string",
+ *               "createdAt": "string (date-time)",
+ *               "updatedAt": "string (date-time)"
  *             }
  *           }
  *           ```
@@ -79,6 +89,7 @@ const { bulkUpdateCellsValidator } = require("../validators/cellValidators");
  *                 description: Formula of the cell
  *               hyperlink:
  *                 type: string
+ *                 format: uri
  *                 nullable: true
  *                 description: Hyperlink of the cell
  *     responses:
@@ -89,15 +100,8 @@ const { bulkUpdateCellsValidator } = require("../validators/cellValidators");
  *             schema:
  *               type: object
  *               properties:
- *                 message:
- *                   type: string
- *                   example: "Cell updated successfully"
- *                 row:
- *                   type: integer
- *                   example: 1
- *                 column:
- *                   type: integer
- *                   example: 1
+ *                 cell:
+ *                   $ref: '#/components/schemas/Cell'
  *       400:
  *         description: Validation error
  *         content:
@@ -153,8 +157,19 @@ router.post(
  *         - **Data Payload:**
  *           ```json
  *           {
- *             "spreadsheetId": "string",
- *             "updatedCount": integer
+ *             "cells": [
+ *               {
+ *                 "id": "string",
+ *                 "sheetId": "string",
+ *                 "row": integer,
+ *                 "column": integer,
+ *                 "content": "string",
+ *                 "formula": "string",
+ *                 "hyperlink": "string",
+ *                 "createdAt": "string (date-time)",
+ *                 "updatedAt": "string (date-time)"
+ *               }
+ *             ]
  *           }
  *           ```
  *     tags: [Cells]
@@ -191,6 +206,7 @@ router.post(
  *                   required:
  *                     - row
  *                     - column
+ *                     - content
  *                   properties:
  *                     row:
  *                       type: integer
@@ -209,7 +225,7 @@ router.post(
  *                       format: uri
  *                       example: "https://example.com"
  *     responses:
- *       '200':
+ *       200:
  *         description: Cells updated successfully
  *         content:
  *           application/json:
@@ -219,28 +235,29 @@ router.post(
  *                 message:
  *                   type: string
  *                   example: "Cells updated successfully"
- *                 updatedCount:
- *                   type: integer
- *                   example: 5
- *       '400':
- *         description: Bad request, invalid input
+ *                 cells:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Cell'
+ *       400:
+ *         description: Bad request, invalid input or formula evaluation issues
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
- *       '403':
+ *       403:
  *         description: Access denied
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
- *       '404':
+ *       404:
  *         description: Spreadsheet or sheet not found
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
- *       '500':
+ *       500:
  *         description: Internal server error
  *         content:
  *           application/json:
@@ -289,23 +306,10 @@ router.put(
  *             schema:
  *               type: object
  *               properties:
- *                 message:
- *                   type: string
- *                   example: "Cells retrieved successfully"
  *                 cells:
  *                   type: array
  *                   items:
- *                     type: object
- *                     properties:
- *                       row:
- *                         type: integer
- *                         example: 1
- *                       column:
- *                         type: integer
- *                         example: 2
- *                       content:
- *                         type: string
- *                         example: "Sample Content"
+ *                     $ref: '#/components/schemas/Cell'
  *       400:
  *         description: Validation error
  *         content:
@@ -392,18 +396,8 @@ router.get(
  *             schema:
  *               type: object
  *               properties:
- *                 message:
- *                   type: string
- *                   example: "Cell retrieved successfully"
- *                 row:
- *                   type: integer
- *                   example: 1
- *                 column:
- *                   type: integer
- *                   example: 2
- *                 content:
- *                   type: string
- *                   example: "Foo"
+ *                 cell:
+ *                   $ref: '#/components/schemas/Cell'
  *       400:
  *         description: Validation error
  *         content:
@@ -459,10 +453,16 @@ router.get(
  *         - **Data Payload:**
  *           ```json
  *           {
- *             "spreadsheetId": "string",
  *             "cell": {
+ *               "id": "string",
+ *               "sheetId": "string",
  *               "row": integer,
- *               "column": integer
+ *               "column": integer,
+ *               "content": "string",
+ *               "formula": "string",
+ *               "hyperlink": "string",
+ *               "createdAt": "string (date-time)",
+ *               "updatedAt": "string (date-time)"
  *             }
  *           }
  *           ```
@@ -526,15 +526,8 @@ router.get(
  *             schema:
  *               type: object
  *               properties:
- *                 message:
- *                   type: string
- *                   example: "Cell updated successfully"
- *                 row:
- *                   type: integer
- *                   example: 1
- *                 column:
- *                   type: integer
- *                   example: 2
+ *                 cell:
+ *                   $ref: '#/components/schemas/Cell'
  *       400:
  *         description: Validation error
  *         content:
@@ -614,7 +607,6 @@ router.put(
  *         - **Data Payload:**
  *           ```json
  *           {
- *             "spreadsheetId": "string",
  *             "sheetId": "string",
  *             "row": integer,
  *             "column": integer
@@ -704,6 +696,196 @@ router.delete(
     validateRequest,
   ],
   cellController.deleteCell
+);
+
+/**
+ * @swagger
+ * /spreadsheets/{spreadsheetId}/sheets/{sheetId}/cells/rows/{row}:
+ *   delete:
+ *     summary: Delete an entire row within a sheet
+ *     description: >
+ *       Delete all cells within a specified row in a sheet.
+ *       **Emits Events:**
+ *       - `rowDeleted`: Emitted after a row is deleted.
+ *         - **Data Payload:**
+ *           ```json
+ *           {
+ *             "spreadsheetId": "string",
+ *             "sheetId": "string",
+ *             "row": integer,
+ *             "deletedCount": integer
+ *           }
+ *           ```
+ *     tags: [Cells]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: spreadsheetId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The UUID of the spreadsheet
+ *       - in: path
+ *         name: sheetId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The UUID of the sheet
+ *       - in: path
+ *         name: row
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Row number (positive integer)
+ *     responses:
+ *       '200':
+ *         description: Row deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Row deleted successfully"
+ *                 sheetId:
+ *                   type: string
+ *                   example: "sheetId1"
+ *                 row:
+ *                   type: integer
+ *                   example: 5
+ *                 deletedCount:
+ *                   type: integer
+ *                   example: 10
+ *       '400':
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '403':
+ *         description: Only owner can delete rows
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '404':
+ *         description: Spreadsheet, sheet, or cells not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '500':
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.delete(
+  "/rows/:row",
+  deleteRowValidator,
+  validateRequest,
+  cellController.deleteRow
+);
+
+/**
+ * @swagger
+ * /spreadsheets/{spreadsheetId}/sheets/{sheetId}/cells/columns/{column}:
+ *   delete:
+ *     summary: Delete an entire column within a sheet
+ *     description: >
+ *       Delete all cells within a specified column in a sheet.
+ *       **Emits Events:**
+ *       - `columnDeleted`: Emitted after a column is deleted.
+ *         - **Data Payload:**
+ *           ```json
+ *           {
+ *             "spreadsheetId": "string",
+ *             "sheetId": "string",
+ *             "column": integer,
+ *             "deletedCount": integer
+ *           }
+ *           ```
+ *     tags: [Cells]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: spreadsheetId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The UUID of the spreadsheet
+ *       - in: path
+ *         name: sheetId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The UUID of the sheet
+ *       - in: path
+ *         name: column
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Column number (positive integer)
+ *     responses:
+ *       '200':
+ *         description: Column deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Column deleted successfully"
+ *                 sheetId:
+ *                   type: string
+ *                   example: "sheetId1"
+ *                 column:
+ *                   type: integer
+ *                   example: 3
+ *                 deletedCount:
+ *                   type: integer
+ *                   example: 8
+ *       '400':
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '403':
+ *         description: Only owner can delete columns
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '404':
+ *         description: Spreadsheet, sheet, or cells not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '500':
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.delete(
+  "/columns/:column",
+  deleteColumnValidator,
+  validateRequest,
+  cellController.deleteColumn
 );
 
 module.exports = router;
