@@ -597,109 +597,6 @@ router.put(
 
 /**
  * @swagger
- * /spreadsheets/{spreadsheetId}/sheets/{sheetId}/cells/{row}/{column}:
- *   delete:
- *     summary: Delete a cell
- *     description: >
- *       Delete a specific cell by row and column numbers.
- *       **Emits Events:**
- *       - `cellDeleted`: Emitted after a cell is deleted.
- *         - **Data Payload:**
- *           ```json
- *           {
- *             "sheetId": "string",
- *             "row": integer,
- *             "column": integer
- *           }
- *           ```
- *     tags: [Cells]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: spreadsheetId
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: The UUID of the spreadsheet
- *       - in: path
- *         name: sheetId
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: The UUID of the sheet
- *       - in: path
- *         name: row
- *         required: true
- *         schema:
- *           type: integer
- *           minimum: 1
- *         description: Row number (positive integer)
- *       - in: path
- *         name: column
- *         required: true
- *         schema:
- *           type: integer
- *           minimum: 1
- *         description: Column number (positive integer)
- *     responses:
- *       200:
- *         description: Cell deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Cell deleted successfully"
- *       400:
- *         description: Validation error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       403:
- *         description: Only owner can delete cells
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Spreadsheet, sheet, or cell not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.delete(
-  "/:row/:column",
-  [
-    param("spreadsheetId")
-      .isUUID()
-      .withMessage("Invalid spreadsheet ID format"),
-    param("sheetId").isUUID().withMessage("Invalid sheet ID format"),
-    param("row")
-      .isInt({ min: 1 })
-      .withMessage("Row number must be a positive integer"),
-    param("column")
-      .isInt({ min: 1 })
-      .withMessage("Column number must be a positive integer"),
-    validateRequest,
-  ],
-  cellController.deleteCell
-);
-
-/**
- * @swagger
  * /spreadsheets/{spreadsheetId}/sheets/{sheetId}/cells/rows/{row}:
  *   delete:
  *     summary: Delete an entire row within a sheet
@@ -886,6 +783,109 @@ router.delete(
   deleteColumnValidator,
   validateRequest,
   cellController.deleteColumn
+);
+
+/**
+ * @swagger
+ * /spreadsheets/{spreadsheetId}/sheets/{sheetId}/cells/{row}/{column}:
+ *   delete:
+ *     summary: Delete a cell
+ *     description: >
+ *       Delete a specific cell by row and column numbers.
+ *       **Emits Events:**
+ *       - `cellDeleted`: Emitted after a cell is deleted.
+ *         - **Data Payload:**
+ *           ```json
+ *           {
+ *             "sheetId": "string",
+ *             "row": integer,
+ *             "column": integer
+ *           }
+ *           ```
+ *     tags: [Cells]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: spreadsheetId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The UUID of the spreadsheet
+ *       - in: path
+ *         name: sheetId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The UUID of the sheet
+ *       - in: path
+ *         name: row
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Row number (positive integer)
+ *       - in: path
+ *         name: column
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Column number (positive integer)
+ *     responses:
+ *       200:
+ *         description: Cell deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Cell deleted successfully"
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Only owner can delete cells
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Spreadsheet, sheet, or cell not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.delete(
+  "/:row/:column",
+  [
+    param("spreadsheetId")
+      .isUUID()
+      .withMessage("Invalid spreadsheet ID format"),
+    param("sheetId").isUUID().withMessage("Invalid sheet ID format"),
+    param("row")
+      .isInt({ min: 1 })
+      .withMessage("Row number must be a positive integer"),
+    param("column")
+      .isInt({ min: 1 })
+      .withMessage("Column number must be a positive integer"),
+    validateRequest,
+  ],
+  cellController.deleteCell
 );
 
 module.exports = router;
