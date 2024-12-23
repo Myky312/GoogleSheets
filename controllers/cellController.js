@@ -30,9 +30,7 @@ exports.bulkCreateOrUpdateCells = async (req, res, next) => {
     if (spreadsheet.ownerId !== req.user.id) {
       const isCollaborator = await spreadsheet.hasCollaborator(req.user.id);
       if (!isCollaborator) {
-        return res
-          .status(403)
-          .json({ message: "Access denied to modify cells" });
+        return res.status(403).json({ message: "Access denied to modify cells" });
       }
     }
 
@@ -44,17 +42,13 @@ exports.bulkCreateOrUpdateCells = async (req, res, next) => {
       return res.status(404).json({ message: "Sheet not found" });
     }
 
-    /**
-     * STEP 1: Evaluate any formulas in the "cells" payload before bulk upserting.
-     * If a cell has a formula that starts with '=' sign, evaluate it via formulaService
-     * and store the result in 'content' so that the database always has the computed value.
-     */
+    // Evaluate formulas before upserting
     for (const cell of cells) {
       if (cell.formula && cell.formula.startsWith("=")) {
         try {
-          const expression = cell.formula.slice(1); // remove '='
+          const expression = cell.formula.slice(1);
           const evaluatedValue = await evaluateFormula(expression, sheetId);
-          cell.content = evaluatedValue.toString(); // store numeric result as string
+          cell.content = evaluatedValue.toString();
         } catch (err) {
           return res.status(400).json({
             message: `Formula evaluation error in cell (row ${cell.row}, col ${cell.column}): ${err.message}`,
@@ -63,25 +57,25 @@ exports.bulkCreateOrUpdateCells = async (req, res, next) => {
       }
     }
 
-    // Prepare cells for bulkCreate with upsert
+    // Prepare cells for bulk upsert
     const cellsToUpsert = cells.map((cell) => ({
       sheetId,
       row: cell.row,
       column: cell.column,
       content: cell.content,
-      formula: cell.formula !== undefined ? cell.formula : null,
-      hyperlink: cell.hyperlink !== undefined ? cell.hyperlink : null,
+      formula: cell.formula ?? null,
+      hyperlink: cell.hyperlink ?? null,
       updatedAt: new Date(),
-      createdAt: new Date(),
     }));
 
-    // Perform bulk upsert
+    // Perform bulk upsert with proper conflict fields
     const upsertedCells = await Cell.bulkCreate(cellsToUpsert, {
       updateOnDuplicate: ["content", "formula", "hyperlink", "updatedAt"],
+      conflictFields: ["sheetId", "row", "column"], // Ensure this matches your unique index
       returning: true,
     });
 
-    // Emit a single real-time update event containing all updated cells
+    // Emit update event
     const io = getIO();
     io.to(spreadsheetId).emit("cellsUpdated", { cells: upsertedCells });
 

@@ -55,6 +55,12 @@ module.exports = (sequelize) => {
       modelName: "Cell",
       tableName: "Cells",
       timestamps: true,
+      indexes: [
+        {
+          unique: true,
+          fields: ["sheetId", "row", "column"],
+        },
+      ],
     }
   );
 
