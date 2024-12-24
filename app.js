@@ -15,6 +15,7 @@ const authRoutes = require("./routes/authRoutes");
 const spreadsheetRoutes = require("./routes/spreadSheetRoutes");
 const sheetRoutes = require("./routes/sheetRoutes");
 const cellRoutes = require("./routes/cellRoutes");
+const formulaRoutes = require("./routes/formulaRoutes");
 const errorHandler = require("./middleware/errorHandler");
 
 const app = express();
@@ -57,6 +58,8 @@ app.use(
   "/spreadsheets/:spreadsheetId/sheets/:sheetId/cells",
   cellRoutes
 );
+
+app.use("/formula", formulaRoutes);
 
 // Swagger Documentation
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));

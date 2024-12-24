@@ -48,7 +48,12 @@ exports.evaluateFormulaEndpoint = async (req, res, next) => {
     // 5. Return the result
     return res.status(200).json({ result });
   } catch (error) {
-    // Let your global error handler or Express error middleware handle this
+    if (error.message.includes("Invalid formula")) {
+      return res.status(400).json({ error: "Invalid formula syntax" });
+    }
+    if (error.message.includes("Referenced cell not found")) {
+      return res.status(400).json({ error: "Referenced cell not found" });
+    }
     next(error);
   }
 };

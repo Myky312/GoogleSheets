@@ -8,8 +8,8 @@ const logger = require("../utils/logger");
 // Create a mathjs instance with all functions
 const math = create(all);
 
-// Regular expression for cell references
-const cellRefRegex = /\b\$?[A-Z]+\$?\d+\b/g;
+// **Updated Regular Expression for Numeric-Only Cell References**
+const cellRefRegex = /\b\d+,\d+\b/g;
 
 /**
  * Evaluates a spreadsheet formula.
@@ -133,39 +133,29 @@ function replaceCellReferences(formula, cellValues) {
 }
 
 /**
- * Parses a cell reference into row and column numbers.
- * @param {string} ref - The cell reference (e.g., "A1").
+ * **Updated** Parses a cell reference into row and column numbers.
+ * @param {string} ref - The cell reference (e.g., "1,1").
  * @returns {Object} - An object with 'row' and 'column' numbers.
  */
 function parseCellReference(ref) {
-  const columnLetters = ref.match(/[A-Z]+/i)[0];
-  const rowNumber = ref.match(/\d+/)[0];
+  const [row, column] = ref.split(",").map(Number);
 
-  // Convert column letters to numbers (e.g., A -> 1, B -> 2, ..., AA -> 27)
-  let columnNumber = 0;
-  for (let i = 0; i < columnLetters.length; i++) {
-    columnNumber *= 26;
-    columnNumber += columnLetters.toUpperCase().charCodeAt(i) - 64; // A=65 in ASCII
+  if (isNaN(row) || isNaN(column)) {
+    throw new Error(`Invalid cell reference format: "${ref}"`);
   }
 
   return {
-    row: parseInt(rowNumber, 10),
-    column: columnNumber,
+    row,
+    column,
   };
 }
 
 /**
- * Converts row and column numbers back to a cell reference.
+ * **Updated** Converts row and column numbers back to a cell reference.
  * @param {number} row - The row number.
  * @param {number} column - The column number.
- * @returns {string} - The cell reference (e.g., "A1").
+ * @returns {string} - The cell reference (e.g., "1,1").
  */
 function convertRowColToRef(row, column) {
-  let ref = "";
-  while (column > 0) {
-    const modulo = (column - 1) % 26;
-    ref = String.fromCharCode(65 + modulo) + ref;
-    column = Math.floor((column - modulo) / 26);
-  }
-  return ref + row;
+  return `${row},${column}`;
 }

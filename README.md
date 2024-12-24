@@ -1,7 +1,7 @@
 # GoogleSheet
 
-GoogleSheet — это веб-приложение для работы с электронными таблицами, которое повторяет функциональность Google Sheets. 
-Оно позволяет пользователям создавать и управлять таблицами, добавлять несколько листов в каждую таблицу и работать с данными и формулами в ячейках. 
+GoogleSheet — это веб-приложение для работы с электронными таблицами, которое повторяет функциональность Google Sheets.  
+Оно позволяет пользователям создавать и управлять таблицами, добавлять несколько листов в каждую таблицу и работать с данными и формулами в ячейках.  
 Приложение поддерживает работу в режиме реального времени, позволяя нескольким пользователям одновременно редактировать одну и ту же таблицу.
 
 ---
@@ -82,25 +82,63 @@ GoogleSheet — это веб-приложение для работы с эле
 ## Начало работы
 
 ### **Предварительные требования**
-- Node.js и npm, установленные на вашем устройстве.
-- Настроенная и запущенная SQL-база данных (например, PostgreSQL, MySQL).
-- Установленный Git для контроля версий (опционально).
+- **Node.js и npm**: Установленные на вашем устройстве.
+- **Docker и Docker Compose**: Установленные на вашем устройстве.
+- **Настроенная и запущенная SQL-база данных** (например, PostgreSQL, MySQL).
+- **Установленный Git для контроля версий** (опционально).
+
+---
+
+### **Установка и запуск с использованием Docker**
+
+1. **Клонируйте репозиторий:**
+
+    ```bash
+    git clone https://github.com/ваш-репозиторий/google-sheet-backend.git
+    cd google-sheet-backend
+    ```
+
+2. **Создайте файл `.env` на основе `.env.example` и настройте переменные окружения:**
+
+    ```bash
+    cp .env.example .env
+    cp .env.test.example .env.test
+    ```
+
+3. **Запустите приложение с помощью Docker Compose:**
+
+    ```bash
+    docker-compose up --build
+    ```
+
+4. **Остановите и удалите контейнеры, сети и тома:**
+
+    ```bash
+    docker-compose down --volumes
+    ```
 
 ---
 
 ## Аутентификация
 
-1. **Регистрация**: Создайте новую учетную запись пользователя, используя конечную точку `/register`.
-2. **Вход**: Получите JWT-токен, авторизовавшись через конечную точку `/login`.
-3. **Заголовок авторизации**: Добавьте токен в заголовок Authorization для маршрутов, требующих аутентификации:
+1. **Регистрация**: Создайте новую учетную запись пользователя, используя конечную точку `/auth/register`.
+2. **Вход**: Получите JWT-токен, авторизовавшись через конечную точку `/auth/login`.
+3. **Заголовок авторизации**: Добавьте токен в заголовок `Authorization` для маршрутов, требующих аутентификации:
 
-```plaintext
-Authorization: Bearer your_jwt_token
-```
+    ```plaintext
+    Authorization: Bearer your_jwt_token
+    ```
 
 ---
 
 ## API-эндпоинты
+
+### **Аутентификация (Authentication)**
+- **Регистрация**: `POST /auth/register`
+- **Вход**: `POST /auth/login`
+- **Обновление токена**: `POST /auth/refresh-token`
+
+---
 
 ### **Таблицы (Spreadsheets)**
 - **Создание**: `POST /spreadsheets`
@@ -124,11 +162,37 @@ Authorization: Bearer your_jwt_token
 
 ### **Ячейки (Cells)**
 - **Создание или обновление**: `POST /spreadsheets/:spreadsheetId/sheets/:sheetId/cells`
+- **Массовое создание или обновление**: `PUT /spreadsheets/:spreadsheetId/sheets/:sheetId/cells`
 - **Получение всех ячеек**: `GET /spreadsheets/:spreadsheetId/sheets/:sheetId/cells`
 - **Получение одной ячейки**: `GET /spreadsheets/:spreadsheetId/sheets/:sheetId/cells/:row/:column`
-- **Удаление**: `DELETE /spreadsheets/:spreadsheetId/sheets/:sheetId/cells/:row/:column`
+- **Обновление конкретной ячейки**: `PUT /spreadsheets/:spreadsheetId/sheets/:sheetId/cells/:row/:column`
+- **Удаление ячейки**: `DELETE /spreadsheets/:spreadsheetId/sheets/:sheetId/cells/:row/:column`
+- **Удаление строки**: `DELETE /spreadsheets/:spreadsheetId/sheets/:sheetId/cells/rows/:row`
+- **Удаление столбца**: `DELETE /spreadsheets/:spreadsheetId/sheets/:sheetId/cells/columns/:column`
+
+---
+
+### **Формулы (Formulas)**
+- **Оценка формулы**: `POST /formulas/evaluate`
 
 ---
 
 ## Обработка формул
+
 При обновлении содержимого ячейки формулой (например, `=SUM(A1:A10)`), приложение автоматически вычисляет результат формулы и обновляет значение ячейки соответствующим образом.
+
+---
+
+## Документация API
+
+После запуска приложения, документация API доступна по адресу: [http://localhost:3000/api-docs](http://localhost:3000/api-docs)
+
+---
+
+## Тестирование
+
+Для запуска тестов используйте следующие команды:
+
+```bash
+npm install
+npm test

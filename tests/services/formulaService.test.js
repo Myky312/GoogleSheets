@@ -18,8 +18,8 @@ describe("formulaService", () => {
       expect(result).toBe(14);
     });
 
-    it("should evaluate a formula with cell references", async () => {
-      const formula = "A1 + B2";
+    it("should evaluate a formula with numeric cell references", async () => {
+      const formula = "1,1 + 2,2"; // Changed from "A1 + B2"
 
       // Mock Cell.findAll
       Cell.findAll.mockResolvedValue([
@@ -42,7 +42,7 @@ describe("formulaService", () => {
     });
 
     it("should evaluate a formula with nested cell formulas", async () => {
-      const formula = "A1 + B1";
+      const formula = "1,1 + 2,2"; // Changed from "A1 + B1"
 
       // Mock Cell.findAll
       Cell.findAll.mockImplementation(({ where }) => {
@@ -51,14 +51,14 @@ describe("formulaService", () => {
 
         conditions.forEach((condition) => {
           if (condition.row === 1 && condition.column === 1) {
-            // A1 has a formula "=C1"
-            results.push({ row: 1, column: 1, content: null, formula: "=C1" });
-          } else if (condition.row === 1 && condition.column === 2) {
-            // B1 has content "3"
-            results.push({ row: 1, column: 2, content: "3", formula: null });
-          } else if (condition.row === 1 && condition.column === 3) {
-            // C1 has content "7"
-            results.push({ row: 1, column: 3, content: "7", formula: null });
+            // Cell "1,1" has a formula "=3,3"
+            results.push({ row: 1, column: 1, content: null, formula: "=3,3" }); // Changed from "=C1"
+          } else if (condition.row === 2 && condition.column === 2) {
+            // Cell "2,2" has content "3"
+            results.push({ row: 2, column: 2, content: "3", formula: null });
+          } else if (condition.row === 3 && condition.column === 3) {
+            // Cell "3,3" has content "7"
+            results.push({ row: 3, column: 3, content: "7", formula: null });
           }
         });
 
@@ -70,12 +70,12 @@ describe("formulaService", () => {
     });
 
     it("should detect circular references", async () => {
-      const formula = "A1 + 1";
+      const formula = "1,1 + 1"; // Changed from "A1 + 1"
 
       Cell.findAll.mockImplementation(({ where }) => {
         if (where[Op.or][0].row === 1 && where[Op.or][0].column === 1) {
           return Promise.resolve([
-            { row: 1, column: 1, content: null, formula: "=A1" },
+            { row: 1, column: 1, content: null, formula: "=1,1" }, // Changed from "=A1"
           ]);
         }
         return Promise.resolve([]);
@@ -87,7 +87,7 @@ describe("formulaService", () => {
     });
 
     it("should detect circular references", async () => {
-      const formula = "A1 + 1";
+      const formula = "1,1 + 1"; // Changed from "A1 + 1"
 
       Cell.findAll.mockImplementation(({ where }) => {
         const results = [];
@@ -95,8 +95,8 @@ describe("formulaService", () => {
 
         conditions.forEach((condition) => {
           if (condition.row === 1 && condition.column === 1) {
-            // A1 has a formula "=A1" (circular reference)
-            results.push({ row: 1, column: 1, content: null, formula: "=A1" });
+            // Cell "1,1" has a formula "=1,1" (circular reference)
+            results.push({ row: 1, column: 1, content: null, formula: "=1,1" }); // Changed from "=A1"
           }
         });
 
@@ -109,7 +109,7 @@ describe("formulaService", () => {
     });
 
     it("should throw an error for invalid formulas", async () => {
-      const formula = "2 +";
+      const formula = "2 +"; // Invalid arithmetic expression
 
       // Since there are no cell references, mock Cell.findAll to return an empty array
       Cell.findAll.mockResolvedValue([]);
@@ -120,11 +120,11 @@ describe("formulaService", () => {
     });
 
     it("should treat missing cells as zero", async () => {
-      const formula = "A1 + B1";
+      const formula = "1,1 + 2,2"; // Changed from "A1 + B1"
 
       Cell.findAll.mockResolvedValue([
         { row: 1, column: 1, content: "5", formula: null },
-        // B1 is missing
+        // Cell "2,2" is missing
       ]);
 
       const result = await formulaService.evaluateFormula(formula, "sheetId1");

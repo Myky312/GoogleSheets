@@ -9,7 +9,7 @@
     "test": "cross-env NODE_ENV=test jest --config ./tests/jest.config.js --verbose",
     "test:sheetRoutes": "cross-env NODE_ENV=test jest --config ./tests/jest.config.js tests/routes/sheetRoutes.test.js",
     "migrate": "sequelize-cli db:migrate --env development",
-    "migrate:test": "sequelize-cli db:migrate --env test",
+    "migrate:test": "cross-env NODE_ENV=test sequelize-cli db:migrate --env test",
     "undo:migrate": "sequelize-cli db:migrate:undo --env development",
     "undo:migrate:test": "sequelize-cli db:migrate:undo --env test",
     "migrate:reset": "sequelize-cli db:migrate:undo:all --env development && sequelize-cli db:migrate --env development",
