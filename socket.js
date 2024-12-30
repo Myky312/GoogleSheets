@@ -13,15 +13,15 @@ let io;
  * @param {http.Server} server - Экземпляр HTTP-сервера (Express).
  * @returns {Server} - Экземпляр Socket.io.
  */
-const initializeSocket = (server) => {
+const initializeSocket = server => {
   io = new Server(server, {
-    // Если нужно настроить CORS:
-    // cors: {
-    //   origin: "http://your-frontend-domain.com", // Замените на адрес фронтенда
-    //   methods: ["GET", "POST"],
-    //   credentials: true,
-    // },
-  });
+    cors: {
+      origin: 'https://shee  ts.uniaffcrm.com', // Замените на адрес фронтенда
+      methods: ['GET', 'POST', 'PUT', 'DELETE'],
+      credentials: true,
+    },
+  })
+
 
   // Мидлвара аутентификации по JWT при установке сокет-соединения
   io.use((socket, next) => {
