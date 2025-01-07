@@ -1,5 +1,5 @@
 # Use an official Node.js runtime as a parent image
-FROM node:18-alpine
+FROM node:21.6.1-alpine
 
 # Create app directory
 WORKDIR /usr/src/app
@@ -12,8 +12,8 @@ RUN apk add --no-cache curl
 # Install bash in the Alpine image
 RUN apk add --no-cache bash
 
-# Expose port 3000 for the Node.js server
-EXPOSE 3000
+# Expose port 5006 for the Node.js server
+EXPOSE 5006
 
 COPY . .
 
@@ -28,4 +28,4 @@ RUN npm install && npm install -g sequelize-cli
 # (Assuming it's already copied with COPY . .)
 
 # Run migrations and start the server using a shell
-CMD ["sh", "-c", "./wait-for-it.sh db:5432 -- npx sequelize-cli db:migrate --config ./config/config.js && npm run start"]
+CMD ["sh", "-c", "./wait-for-it.sh 45.90.58.22:5432 -- npx sequelize-cli db:migrate --config ./config/config.js && npm run start"]
