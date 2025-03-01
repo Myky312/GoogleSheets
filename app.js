@@ -31,7 +31,7 @@ app.use(express.json());
 // Enable CORS
 app.use(
   cors({
-    origin: 'https://sheets.uniaffcrm.com', // Replace with your frontend URL 
+    origin: '*', // Replace with your frontend URL 
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true,
   })

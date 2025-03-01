@@ -28,4 +28,4 @@ RUN npm install && npm install -g sequelize-cli
 # (Assuming it's already copied with COPY . .)
 
 # Run migrations and start the server using a shell
-CMD ["sh", "-c", "./wait-for-it.sh 45.90.58.22:5432 -- npx sequelize-cli db:migrate --config ./config/config.js && npm run start"]
+#CMD ["sh", "-c", "./wait-for-it.sh 45.90.58.22:5432 -- npx sequelize-cli db:migrate --config ./config/config.js && npm run start"]

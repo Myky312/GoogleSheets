@@ -16,7 +16,7 @@ let io;
 const initializeSocket = server => {
   io = new Server(server, {
     cors: {
-      origin: 'https://shee  ts.uniaffcrm.com', // Замените на адрес фронтенда
+      origin: '*', // Замените на адрес фронтенда
       methods: ['GET', 'POST', 'PUT', 'DELETE'],
       credentials: true,
     },
